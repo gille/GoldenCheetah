@@ -43,7 +43,6 @@ WWPowerScale::paint(QPainter *painter)
 
     // lets get the zones, CP and PMAX
     int CP = context->athlete->zones(false)->getCP(rnum);
-    int Pmax = context->athlete->zones(false)->getPmax(rnum);
     int numZones = context->athlete->zones(false)->numZones(rnum);
 
     QFontMetrics fontMetrics(workoutWidget()->markerFont);

@@ -1071,16 +1071,15 @@ int ANT::openPort()
 
 int ANT::rawWrite(uint8_t *bytes, int size) // unix!!
 {
-    int rc=0;
-
 #ifdef WIN32
 #ifdef GC_HAVE_LIBUSB
+    int rc = 0;
     switch (usbMode) {
 #ifdef GC_HAVE_USBXPRESS
     case USB1:
         rc = USBXpress::write(&devicePort, bytes, size);
         break;
-#endif
+#endif  // GC_HAVE_USBXPRESS
     case USB2:
         rc = usb2->write((char *)bytes, size);
         break;
@@ -1091,12 +1090,15 @@ int ANT::rawWrite(uint8_t *bytes, int size) // unix!!
 
     if (!rc) rc = -1; // return -1 if nothing written
     return rc;
-#else
-    return rc=-1;
-#endif
-#else
-
+#else  // GC_HAVE_LIBUSB
+    Q_UNUSED(bytes);
+    Q_UNUSED(size);
+    return -1;
+#endif  // GC_HAVE_LIBUSB
+#else  // WIN32
 #ifdef GC_HAVE_LIBUSB
+    int rc = 0;
+
     if (usbMode == USB2) {
         return usb2->write((char *)bytes, size);
     }
@@ -1107,17 +1109,19 @@ int ANT::rawWrite(uint8_t *bytes, int size) // unix!!
         ioctl(devicePort, FIONREAD, &ibytes);
 
         // timeouts are less critical for writing, since vols are low
-        rc= write(devicePort, bytes, size);
+        rc = write(devicePort, bytes, size);
 
         if (rc != -1) tcdrain(devicePort); // wait till its gone.
 
         ioctl(devicePort, FIONREAD, &ibytes);
         return rc;
     }
-#endif
-#endif
+#else  // GC_HAVE_LIBUSB
+    Q_UNUSED(bytes);
+    Q_UNUSED(size);    
     return -1;
-
+#endif  // GC_HAVE_LIBUSB
+#endif  // WIN32
 }
 
 int ANT::rawRead(uint8_t bytes[], int size)

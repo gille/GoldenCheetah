@@ -2360,6 +2360,7 @@ RideFile::resample(double newRecIntSecs, int interpolate)
 RideFile *
 RideFile::resample(double newRecIntSecs, int interpolate)
 {
+    Q_UNUSED(interpolate);
 
     // resample if interval has changed
     if (newRecIntSecs != recIntSecs()) {

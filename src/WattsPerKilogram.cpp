@@ -294,7 +294,7 @@ class Vo2max : public RideMetric {
     }
 
     void compute(RideItem *item, Specification, const QHash<QString,RideMetric*> &deps) {
-
+        Q_UNUSED(item);
         PeakWPK5m *wpk5m = dynamic_cast<PeakWPK5m*>(deps.value("5m_peak_wpk"));
 
         // Using New ACSM formula also outlined here:
@@ -330,7 +330,7 @@ class EtimatedAverageWPK_DrF : public RideMetric {
     }
 
     void compute(RideItem *item, Specification, const QHash<QString,RideMetric*> &deps) {
-
+        Q_UNUSED(item);
         // get thos dependencies
         double vam = deps.value("vam")->value(true);
         double gradient = deps.value("gradient")->value(true);

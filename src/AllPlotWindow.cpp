@@ -1836,16 +1836,6 @@ AllPlotWindow::rideSelected()
     intervalPlot->setDataFromRide(ride);
 
 
-    // Fixup supplied by Josef Gebel
-    int startidx, stopidx;
-    if ( fullPlot->bydist == true ) {
-        startidx = ride->ride()->distanceIndex( ( double ) spanSlider->lowerValue() / 1000.0 );
-        stopidx = ride->ride()->distanceIndex( ( double ) spanSlider->upperValue() / 1000.0 );
-    } else {
-        startidx = ride->ride()->timeIndex( spanSlider->lowerValue() );
-        stopidx = ride->ride()->timeIndex( spanSlider->upperValue() );
-    }
-
     // redraw all the plots, they will check
     // to see if they are currently visible
     // and only redraw if neccessary

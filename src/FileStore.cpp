@@ -1158,6 +1158,7 @@ FileStoreSyncDialog::downloadNext()
 void
 FileStoreSyncDialog::completedRead(QByteArray *data, QString name, QString message)
 {
+    Q_UNUSED(message);
     QTreeWidget *which = sync ? rideListSync : rideListDown;
     int col = sync ? 7 : 5;
 

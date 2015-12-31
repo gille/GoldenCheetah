@@ -259,8 +259,8 @@ private:
     QString textUnderCursor() const;
 
 private:
-    QCompleter *c;
     Context *context;
+    QCompleter *c;
 };
 
 #endif // _GC_LTMTool_h

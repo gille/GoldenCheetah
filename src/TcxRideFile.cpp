@@ -54,6 +54,7 @@ RideFile *TcxFileReader::openRideFile(QFile &file, QStringList &errors, QList<Ri
 QByteArray
 TcxFileReader::toByteArray(Context *context, const RideFile *ride, bool withAlt, bool withWatts, bool withHr, bool withCad) const
 {
+    Q_UNUSED(context);
     QDomText text;
     QDomDocument doc;
     QDomProcessingInstruction hdr = doc.createProcessingInstruction("xml","version=\"1.0\"");

@@ -52,7 +52,12 @@
 // Filter / formula
 #include "DataFilter.h"
 
-LTMTool::LTMTool(Context *context, LTMSettings *settings) : QWidget(context->mainWindow), settings(settings), context(context), active(false), _amFiltered(false)
+LTMTool::LTMTool(Context *context, LTMSettings *settings)
+    : QWidget(context->mainWindow),
+      settings(settings),
+      context(context),
+      active(false),
+      _amFiltered(false)
 {
     setStyleSheet("QFrame { FrameStyle = QFrame::NoFrame };"
                   "QWidget { background = Qt::white; border:0 px; margin: 2px; };");

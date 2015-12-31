@@ -278,10 +278,6 @@ void PMCData::refresh()
     double planned_lastSTS=0.0f;
 
     double planned_rollingStress=0;
-
-    double expected_lastLTS=0.0f;
-    double expected_lastSTS=0.0f;
-
     double expected_rollingStress=0;
 
     for(int day=0; day < days_; day++) {
