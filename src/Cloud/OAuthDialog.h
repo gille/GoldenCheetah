@@ -49,6 +49,7 @@ public:
         STRAVA,
         DROPBOX,
         CYCLING_ANALYTICS,
+		GOOGLE_DRIVE,
         NOLIO,
         SPORTTRACKS,
         WITHINGS,

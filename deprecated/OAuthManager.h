@@ -52,6 +52,8 @@
 #endif
 #endif
 
+#include "kqoauth/kqoauthauthreplyserver.h"
+
 
 class OAuthManager : QObject
 {
@@ -96,6 +98,7 @@ private slots:
     void onAuthorizationPageRequested (QUrl pageUrl);
 #endif
 
+    void onVerificationReceived(QMultiMap<QString, QString> params);
 
 private:
     Context *context;
@@ -105,6 +108,7 @@ private:
     CloudService *service;
     QString baseURL; // can be passed, but typically is blank (used by Todays Plan)
     QString clientsecret; // can be passed, but typicall is blank (used by Todays Plan)
+    quint16 replyPort;
 
     QVBoxLayout *layout;
 
@@ -118,6 +122,8 @@ private:
     QNetworkAccessManager* manager;
 
     QUrl url;
+
+    KQOAuthAuthReplyServer *replyServer;
 
 #ifdef GC_HAVE_KQOAUTH
     KQOAuthManager *oauthManager;

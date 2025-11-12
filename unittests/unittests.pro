@@ -9,7 +9,8 @@ equals(GC_UNITTESTS, active) {
 			   Core/season \
 			   Core/seasonParser \
 			   Core/units \
-			   Gui/calendarData
+			   Gui/calendarData \
+			   Cloud/googleDrive
 	CONFIG += ordered
 } else {
 	message("Unittests are disabled; to enable copy unittests/unittests.pri.in to unittests/unittests.pri")

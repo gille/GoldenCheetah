@@ -228,7 +228,7 @@ void GoogleMapControl::createHtml()
     "   body { height: 100%; margin: 0; padding: 0 }\n"
     "   #map-canvas { height: 100% }\n"
     "</style>\n"
-    "<script type=\"text/javascript\" src=\"http://maps.googleapis.com/maps/api/js?key=AIzaSyASrk4JoJOzESQguDwjk8aq9nQXsrUUskM\"></script> \n");
+    "<script type=\"text/javascript\" src=\"https://maps.googleapis.com/maps/api/js?key=AIzaSyASrk4JoJOzESQguDwjk8aq9nQXsrUUskM\"></script> \n");
 
 #ifdef NOWEBKIT
     currentPage += QString("<script type=\"text/javascript\" src=\"qrc:///qtwebchannel/qwebchannel.js\"></script>\n");

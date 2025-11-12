@@ -43,6 +43,7 @@ OAuthDialog::OAuthDialog(Context *context, OAuthSite site, CloudService *service
         if (service->id() == "Strava") site = this->site = STRAVA;
         if (service->id() == "Dropbox") site = this->site = DROPBOX;
         if (service->id() == "Cycling Analytics") site = this->site = CYCLING_ANALYTICS;
+		if (service->id() == "Google Drive") site = this->site = GOOGLE_DRIVE;
         if (service->id() == "Nolio") site = this->site = NOLIO;
         if (service->id() == "Withings") site = this->site = WITHINGS;
         if (service->id() == "PolarFlow") site = this->site = POLAR;
@@ -124,6 +125,17 @@ OAuthDialog::OAuthDialog(Context *context, OAuthSite site, CloudService *service
         urlstr.append("response_type=code&");
         urlstr.append("approval_prompt=force");
 
+	} else if (site == GOOGLE_DRIVE) {
+
+		const QString scope =  service->getSetting(GC_GOOGLE_DRIVE_AUTH_SCOPE, "drive.file").toString();
+		// Google OAuth 2.0 installed app via web redirect (using hosted blank.html)
+		urlstr = QString("https://accounts.google.com/o/oauth2/v2/auth?");
+		urlstr.append("scope=https://www.googleapis.com/auth/" + scope + "&");
+		urlstr.append("redirect_uri=https://goldencheetah.github.io/blank.html&");
+		urlstr.append("response_type=code&");
+		urlstr.append("access_type=offline&include_granted_scopes=true&prompt=consent&");
+		urlstr.append("client_id=").append(GC_GOOGLE_DRIVE_CLIENT_ID);
+
     } else if (site == POLAR) {
 
         // OAUTH 2.0 - Polar flow for installed applications
@@ -166,7 +178,7 @@ OAuthDialog::OAuthDialog(Context *context, OAuthSite site, CloudService *service
     //
     // STEP 1: LOGIN AND AUTHORISE THE APPLICATION
     //
-    if (site == NOLIO || site == DROPBOX || site == STRAVA || site == CYCLING_ANALYTICS || site == POLAR || site == SPORTTRACKS || site == WITHINGS || site == AZUM) {
+	if (site == NOLIO || site == DROPBOX || site == STRAVA || site == CYCLING_ANALYTICS || site == GOOGLE_DRIVE || site == POLAR || site == SPORTTRACKS || site == WITHINGS || site == AZUM) {
         url = QUrl(urlstr);
         view->setUrl(url);
         // connects
@@ -201,8 +213,8 @@ OAuthDialog::urlChanged(const QUrl &url)
 {
     QString authheader;
 
-    // sites that use this scheme
-    if (site == NOLIO || site == DROPBOX || site == STRAVA || site == CYCLING_ANALYTICS || site == POLAR || site == SPORTTRACKS || site == XERT || site == RIDEWITHGPS || site == WITHINGS || site == AZUM) {
+	// sites that use this scheme
+	if (site == NOLIO || site == DROPBOX || site == STRAVA || site == CYCLING_ANALYTICS || site == GOOGLE_DRIVE || site == POLAR || site == SPORTTRACKS || site == XERT || site == RIDEWITHGPS || site == WITHINGS || site == AZUM) {
 
         if (url.toString().startsWith("http://www.goldencheetah.org/?state=&code=") ||
                 url.toString().contains("blank.html?code=") ||
@@ -262,6 +274,14 @@ OAuthDialog::urlChanged(const QUrl &url)
 #if (defined GC_NOLIO_CLIENT_ID) && (defined GC_NOLIO_SECRET)
                 authheader = QString("%1:%2").arg(GC_NOLIO_CLIENT_ID).arg(GC_NOLIO_SECRET);
 #endif
+
+			} else if (site == GOOGLE_DRIVE) {
+
+				urlstr = QString("https://oauth2.googleapis.com/token?");
+				params.addQueryItem("client_id", GC_GOOGLE_DRIVE_CLIENT_ID);
+				params.addQueryItem("client_secret", GC_GOOGLE_DRIVE_CLIENT_SECRET);
+				params.addQueryItem("redirect_uri", "https://goldencheetah.github.io/blank.html");
+				params.addQueryItem("grant_type", "authorization_code");
 
             }  else if (site == CYCLING_ANALYTICS) {
 
@@ -486,6 +506,13 @@ OAuthDialog::networkRequestFinished(QNetworkReply *reply)
             QString info = QString(tr("Nolio authorization was successful."));
             QMessageBox information(QMessageBox::Information, tr("Information"), info);
             information.exec();
+		} else if (site == GOOGLE_DRIVE) {
+			service->setSetting(GC_GOOGLE_DRIVE_REFRESH_TOKEN, refresh_token);
+			service->setSetting(GC_GOOGLE_DRIVE_ACCESS_TOKEN, access_token);
+			service->setSetting(GC_GOOGLE_DRIVE_LAST_ACCESS_TOKEN_REFRESH, QDateTime::currentDateTime());
+			QString info = QString(tr("Google Drive authorization was successful."));
+			QMessageBox information(QMessageBox::Information, tr("Information"), info);
+			information.exec();
         } else if (site == AZUM) {
             service->setSetting(GC_AZUM_ACCESS_TOKEN, access_token);
             service->setSetting(GC_AZUM_REFRESH_TOKEN, refresh_token);

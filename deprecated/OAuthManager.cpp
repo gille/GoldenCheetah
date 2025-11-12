@@ -32,6 +32,8 @@
 
 #include <QJsonParseError>
 #endif
+#include <QDesktopServices>
+#include <QHostAddress>
 
 OAuthManager::OAuthManager(Context *context, OAuthSite site, CloudService *service, QString baseURL, QString clientsecret) :
     context(context), site(site), service(service), baseURL(baseURL), clientsecret(clientsecret)
@@ -61,6 +63,9 @@ OAuthManager::OAuthManager(Context *context, OAuthSite site, CloudService *servi
 
     // ignore responses to false, used by POLARFLOW when binding the user
     ignore = false;
+
+    replyServer = NULL;
+    replyPort = 0;
 
     // SSL is available - so authorisation can take place
     noSSLlib = false;
@@ -108,26 +113,50 @@ OAuthManager::authorize()
 
     } else if (site == GOOGLE_DRIVE) {
 
-        const QString scope =  service->getSetting(GC_GOOGLE_DRIVE_AUTH_SCOPE, "drive.appdata").toString();
-        // OAUTH 2.0 - Google flow for installed applications
-        urlstr = QString("https://accounts.google.com/o/oauth2/auth?");
-        // We only request access to the application data folder, not all files.
+        const QString scope =  service->getSetting(GC_GOOGLE_DRIVE_AUTH_SCOPE, "drive.file").toString();
+        // Loopback redirect for installed applications (OOB deprecated)
+        replyServer = new KQOAuthAuthReplyServer(this);
+        if (!replyServer->listen(QHostAddress::LocalHost, 0)) {
+            QString error = QString(tr("Unable to start local redirect listener for Google authorization."));
+            QMessageBox oautherr(QMessageBox::Critical, tr("Authorization Error"), error);
+            oautherr.exec();
+            return;
+        }
+        replyPort = replyServer->serverPort();
+        connect(replyServer, SIGNAL(verificationReceived(QMultiMap<QString,QString>)), this, SLOT(onVerificationReceived(QMultiMap<QString,QString>)));
+
+        const QString redirectUri = QString("http://127.0.0.1:%1/").arg(replyPort);
+        urlstr = QString("https://accounts.google.com/o/oauth2/v2/auth?");
         urlstr.append("scope=https://www.googleapis.com/auth/" + scope + "&");
-        urlstr.append("redirect_uri=urn:ietf:wg:oauth:2.0:oob&");
+        urlstr.append("redirect_uri=").append(QUrl::toPercentEncoding(redirectUri)).append("&");
         urlstr.append("response_type=code&");
+        urlstr.append("access_type=offline&include_granted_scopes=true&prompt=consent&");
         urlstr.append("client_id=").append(GC_GOOGLE_DRIVE_CLIENT_ID);
+        QDesktopServices::openUrl(QUrl(urlstr));
 
     } else if (site == KENTUNI) {
 
-        const QString scope =  service->getSetting(GC_UOK_GOOGLE_DRIVE_AUTH_SCOPE, "drive.appdata").toString();
+        const QString scope =  service->getSetting(GC_UOK_GOOGLE_DRIVE_AUTH_SCOPE, "drive.file").toString();
 
-        // OAUTH 2.0 - Google flow for installed applications
-        urlstr = QString("https://accounts.google.com/o/oauth2/auth?");
-        // We only request access to the application data folder, not all files.
+        // Loopback redirect for installed applications (OOB deprecated)
+        replyServer = new KQOAuthAuthReplyServer(this);
+        if (!replyServer->listen(QHostAddress::LocalHost, 0)) {
+            QString error = QString(tr("Unable to start local redirect listener for Google authorization."));
+            QMessageBox oautherr(QMessageBox::Critical, tr("Authorization Error"), error);
+            oautherr.exec();
+            return;
+        }
+        replyPort = replyServer->serverPort();
+        connect(replyServer, SIGNAL(verificationReceived(QMultiMap<QString,QString>)), this, SLOT(onVerificationReceived(QMultiMap<QString,QString>)));
+
+        const QString redirectUri = QString("http://127.0.0.1:%1/").arg(replyPort);
+        urlstr = QString("https://accounts.google.com/o/oauth2/v2/auth?");
         urlstr.append("scope=https://www.googleapis.com/auth/" + scope + "&");
-        urlstr.append("redirect_uri=urn:ietf:wg:oauth:2.0:oob&");
+        urlstr.append("redirect_uri=").append(QUrl::toPercentEncoding(redirectUri)).append("&");
         urlstr.append("response_type=code&");
+        urlstr.append("access_type=offline&include_granted_scopes=true&prompt=consent&");
         urlstr.append("client_id=").append(GC_GOOGLE_DRIVE_CLIENT_ID);
+        QDesktopServices::openUrl(QUrl(urlstr));
 
 #endif
 
@@ -329,7 +358,7 @@ OAuthManager::getTokenWithCode(QString code)
     QString authheader;
 
     // sites that use this scheme
-    if (site == DROPBOX || site == STRAVA || site == CYCLING_ANALYTICS || site == TODAYSPLAN || site == POLAR || site == SPORTTRACKS || site == XERT) {
+    if (site == DROPBOX || site == STRAVA || site == CYCLING_ANALYTICS || site == TODAYSPLAN || site == POLAR || site == SPORTTRACKS || site == XERT || site == GOOGLE_DRIVE || site == KENTUNI) {
 
 
             // sporttracks insists on passing state
@@ -415,6 +444,13 @@ OAuthManager::getTokenWithCode(QString code)
                 params.addQueryItem("grant_type", "password");
 
                 authheader = QString("%1:%1").arg("xert_public");
+            }  else if (site == GOOGLE_DRIVE || site == KENTUNI) {
+
+                urlstr = QString("https://oauth2.googleapis.com/token?");
+                params.addQueryItem("client_id", GC_GOOGLE_DRIVE_CLIENT_ID);
+                params.addQueryItem("client_secret", GC_GOOGLE_DRIVE_CLIENT_SECRET);
+                params.addQueryItem("redirect_uri", QString("http://127.0.0.1:%1/").arg(replyPort));
+                params.addQueryItem("grant_type", "authorization_code");
             }
 
             // all services will need us to send the temporary code received
@@ -447,6 +483,14 @@ OAuthManager::getTokenWithCode(QString code)
             networkRequestFinished(reply);
 
 
+    }
+}
+
+void OAuthManager::onVerificationReceived(QMultiMap<QString, QString> params)
+{
+    QString code = params.value("code");
+    if (code != "") {
+        getTokenWithCode(code);
     }
 }
 
