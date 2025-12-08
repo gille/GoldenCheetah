@@ -48,6 +48,7 @@ build-src*
 qwt/src/debug/
 qwt/src/release/
 src/Makefile.Debug
+src/Makefile.src
 src/Makefile.Release
 src/object_script.GoldenCheetah.Debug
 src/object_script.GoldenCheetah.Release
