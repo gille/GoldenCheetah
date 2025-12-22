@@ -24,11 +24,19 @@
 // Required to use std::lower_bound on QXYSeries data in-place
 class SeriesIterator {
 public:
+<<<<<<< HEAD
     typedef std::random_access_iterator_tag iterator_category;
     typedef QPointF value_type;
     typedef ptrdiff_t difference_type;
     typedef QPointF* pointer;
     typedef QPointF& reference;
+=======
+    using iterator_category = std::random_access_iterator_tag;
+    using value_type        = QPointF;
+    using difference_type   = std::ptrdiff_t;
+    using pointer           = const QPointF*;
+    using reference         = const QPointF&;
+>>>>>>> bfcd32d39 (QT Cleanup)
 
     SeriesIterator(QXYSeries *series, int index) : m_series(series), m_index(index) {}
 

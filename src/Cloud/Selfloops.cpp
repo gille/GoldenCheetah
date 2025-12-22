@@ -19,7 +19,7 @@
 #include "Selfloops.h"
 #include "Athlete.h"
 #include "Settings.h"
-#include "mvjson.h"
+//xx #include "mvjson.h"
 #include <QByteArray>
 #include <QHttpMultiPart>
 #include <QJsonDocument>
@@ -161,12 +161,20 @@ Selfloops::writeFileCompleted()
 
         // parse the response
         QString response = reply->readAll();
-        MVJSONReader jsonResponse(string(response.toLatin1()));
+        QJsonParseError parseError;
+        QJsonDocument jsonResponse = QJsonDocument::fromJson(response.toUtf8(), &parseError);
 
-        // get values
-        error = jsonResponse.root->getFieldInt("error_code");
-        uploadError = jsonResponse.root->getFieldString("message").c_str();
-        //XXX selfloopsActivityId = jsonResponse.root->getFieldInt("activity_id");
+        if (parseError.error == QJsonParseError::NoError && jsonResponse.isObject()) {
+            QJsonObject root = jsonResponse.object();
+            // get values
+            error = root.value("error_code").toInt();
+            // Assuming message is a string
+            uploadError = root.value("message").toString();
+            //XXX selfloopsActivityId = root.value("activity_id").toInt();
+        } else {
+            error = 500;
+            uploadError = "bad response or parser exception.";
+        }
 
     } catch(...) {
 

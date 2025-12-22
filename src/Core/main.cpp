@@ -35,8 +35,7 @@
 #include <QMessageBox>
 #include "ChooseCyclistDialog.h"
 #ifdef GC_WANT_HTTP
-#include "httplistener.h"
-#include "httprequesthandler.h"
+// httplistener removed
 #endif
 #ifdef GC_HAS_CLOUD_DB
 #include "CloudDBCommon.h"
@@ -75,7 +74,7 @@ QApplication *application;
 
 #ifdef GC_WANT_HTTP
 #include "APIWebService.h"
-HttpListener *listener = NULL;
+APIWebService *apiService = NULL;
 #endif
 
 // R is not multithreaded, has a single instance that we setup at startup.
@@ -91,7 +90,7 @@ RTool *rtool = NULL;
 void terminate(int code)
 {
 #ifdef GC_WANT_HTTP
-    if (listener) listener->close();
+    if (apiService) apiService->stop();
 #endif
 
     // tidy up static stuff (our globals) that are not tied
@@ -382,7 +381,7 @@ main(int argc, char *argv[])
     // INITIALISE ONE TIME OBJECTS
     //
 #ifdef GC_WANT_HTTP
-    listener = NULL;
+    apiService = nullptr;
 #endif
 
 #ifdef GC_WANT_X11
@@ -677,12 +676,14 @@ main(int argc, char *argv[])
             // use the default handler (just get an error page)
             QSettings* settings=new QSettings(httpini,QSettings::IniFormat,application);
 
-            if (listener) {
-                // when changing the Athlete Directory, there is already a listener running
-                // close first to avoid errors
-                listener->close();
+            if (apiService) {
+                apiService->stop();
+                delete apiService;
+                apiService = NULL;
             }
-            listener=new HttpListener(settings,new APIWebService(home, application),application);
+            apiService = new APIWebService(home, application);
+            int port = settings->value("port", 12021).toInt();
+            apiService->start(port);
 
             // if not going on to launch a gui...
             if (nogui) {
@@ -693,7 +694,7 @@ main(int argc, char *argv[])
 
                 // stop web server if running
                 qDebug()<<"Stopping GoldenCheetah API web-services...";
-                listener->close();
+                if (apiService) apiService->stop();
 
                 // and done
                 terminate(0);

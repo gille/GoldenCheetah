@@ -19,10 +19,12 @@
 #ifndef _GC_APIWebService_h
 #define _GC_APIWebService_h
 
-#include "httprequesthandler.h"
+#include <QObject>
+#include <QtHttpServer>
+#include <QTcpServer>
+#include <QDir>
 #include "RideItem.h"
 #include "RideMetadata.h"
-#include <QDir>
 
 struct listRideSettings {
     bool intervals;
@@ -31,31 +33,35 @@ struct listRideSettings {
     QList<QString> metawanted; // metadata to list
 };
 
-class APIWebService : public HttpRequestHandler
+class APIWebService : public QObject
 {
+    Q_OBJECT
 
     public:
+        explicit APIWebService(QDir home, QObject *parent=nullptr);
+        ~APIWebService();
 
-        // nothing to do in constructor
-        APIWebService(QDir home, QObject *parent=NULL) : HttpRequestHandler(parent), home(home) {}
+        bool start(quint16 port);
+        void stop();
 
-        // request despatchers
-        void service(HttpRequest &request, HttpResponse &response);
-        void athleteData(QStringList &paths, HttpRequest &request, HttpResponse &response);
 
-        // Discrete API endpoints
-        void listAthletes(HttpRequest &request, HttpResponse &response);
-        void listRides(QString athlete, HttpRequest &request, HttpResponse &response);
-        void listActivity(QString athlete, QStringList paths, HttpRequest &request, HttpResponse &response);
-        void listMMP(QString athlete, QStringList paths, HttpRequest &request, HttpResponse &response);
-        void listZones(QString athlete, QStringList paths, HttpRequest &request, HttpResponse &response);
-        void listMeasures(QString athlete, QStringList paths, HttpRequest &request, HttpResponse &response);
-
-        // utility
-        void writeRideLine(RideItem &item, HttpRequest *request, HttpResponse *response);
 
     private:
         QDir home;
+        QHttpServer *server;
+        QTcpServer *tcpServer = nullptr;
+
+        // route handlers
+        QHttpServerResponse handleListAthletes(const QHttpServerRequest &request);
+        QHttpServerResponse handleAthleteRequests(const QString &athlete, const QHttpServerRequest &request);
+        QHttpServerResponse handleListRides(const QString &athlete, const QHttpServerRequest &request);
+        QHttpServerResponse handleListZones(const QString &athlete, const QHttpServerRequest &request);
+        QHttpServerResponse handleListMeasures(const QString &athlete, const QString &group, const QHttpServerRequest &request);
+        QHttpServerResponse handleListActivity(const QString &athlete, const QString &id, const QHttpServerRequest &request);
+        QHttpServerResponse handleListMMP(const QString &athlete, const QString &sub, const QHttpServerRequest &request);
+        
+        // Helpers
+        // ... (we'll implement logic in cpp, helper signatures might likely change)
 };
 
 #endif

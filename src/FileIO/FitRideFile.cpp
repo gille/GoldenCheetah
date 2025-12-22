@@ -223,7 +223,7 @@ static void loadMetadata()
 
         if (!root.contains("PRODUCTS")) goto badconfig;
         QJsonArray PRODUCTS = root["PRODUCTS"].toArray();
-        for(const QJsonValue &val : PRODUCTS) {
+        for (const QJsonValue &val : PRODUCTS) {
 
             // convert so we can inspect
             QJsonObject obj = val.toObject();
@@ -240,7 +240,7 @@ static void loadMetadata()
 
         if (!root.contains("MANUFACTURERS")) goto badconfig;
         QJsonArray MANUFACTURERS = root["MANUFACTURERS"].toArray();
-        for(const QJsonValue &val : MANUFACTURERS) {
+        for (const QJsonValue &val : MANUFACTURERS) {
 
             // convert so we can inspect
             QJsonObject obj = val.toObject();
@@ -256,7 +256,7 @@ static void loadMetadata()
 
         if (!root.contains("FIELDS")) goto badconfig;
         QJsonArray FIELDS = root["FIELDS"].toArray();
-        for(const QJsonValue &val : FIELDS) {
+        for (const QJsonValue &val : FIELDS) {
 
             // Message:FieldNum lists
             //
@@ -310,7 +310,7 @@ static void loadMetadata()
 
         if (!root.contains("MESSAGES")) goto badconfig;
         QJsonArray MESSAGES = root["MESSAGES"].toArray();
-        for(const QJsonValue &val : MESSAGES) {
+        for (const QJsonValue &val : MESSAGES) {
 
             // convert so we can inspect
             QJsonObject obj = val.toObject();

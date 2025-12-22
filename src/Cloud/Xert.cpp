@@ -22,7 +22,7 @@
 #include "Settings.h"
 #include "Units.h"
 #include "JsonRideFile.h"
-#include "mvjson.h"
+//xx #include "mvjson.h"
 #include <QByteArray>
 #include <QHttpMultiPart>
 #include <QJsonDocument>
@@ -545,13 +545,18 @@ Xert::writeFileCompleted()
         QString response = reply->readAll();
         printd("reply:%s\n", response.toStdString().c_str());
 
-        MVJSONReader jsonResponse(string(response.toLatin1()));
+        QJsonParseError parseError;
+        QJsonDocument jsonResponse = QJsonDocument::fromJson(response.toUtf8(), &parseError);
 
-        // get values
-        //uploadError = jsonResponse.root->getFieldString("error").c_str();
-        success = jsonResponse.root->getFieldBool("success");
-        if (!success)
-            uploadError = "upload not successful";
+        if (parseError.error == QJsonParseError::NoError && jsonResponse.isObject()) {
+            QJsonObject root = jsonResponse.object();
+            // get values
+            success = root.value("success").toBool();
+            if (!success)
+                uploadError = "upload not successful";
+        } else {
+            uploadError = "bad response or parser exception.";
+        }
 
 
     } catch(...) {

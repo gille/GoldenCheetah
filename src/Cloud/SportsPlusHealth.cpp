@@ -21,7 +21,7 @@
 #include "SportsPlusHealth.h"
 #include "Athlete.h"
 #include "Settings.h"
-#include "mvjson.h"
+//xx #include "mvjson.h"
 #include <QByteArray>
 #include <QHttpMultiPart>
 #include <QJsonDocument>
@@ -158,13 +158,21 @@ SportsPlusHealth::writeFileCompleted()
     int errorcode=-1;
 
     printd("reply:%s\n", reply->readAll().toStdString().c_str());
-    MVJSONReader jsonResponse(reply->readAll().toStdString().c_str());
-    if(jsonResponse.root && jsonResponse.root->hasField("success") && jsonResponse.root->hasField("error_code")) {
-        success = jsonResponse.root->getFieldBool("success");
-        errorcode = jsonResponse.root->getFieldInt("error_code");
+    QJsonParseError parseError;
+    QJsonDocument jsonResponse = QJsonDocument::fromJson(reply->readAll(), &parseError);
+    
+    if (parseError.error == QJsonParseError::NoError && jsonResponse.isObject()) {
+        QJsonObject root = jsonResponse.object();
+        if (root.contains("success") && root.contains("error_code")) {
+            success = root.value("success").toBool();
+            errorcode = root.value("error_code").toInt();
+        } else {
+            success = false;
+            errorcode = -1;
+        }
     } else {
-        success = false;
-        errorcode = -1;
+         success = false;
+         errorcode = -1;
     }
 
     if (success) {

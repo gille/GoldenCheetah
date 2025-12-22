@@ -77,12 +77,9 @@ ride: '{' rideelement_list '}'                                  {
                                                                     // search for one to update using serial search,
                                                                     // if the performance is too slow we can move to
                                                                     // a binary search, but suspect this ok < 10000 rides
-                                                                    if (jc->api != NULL) {
-                                                                    #ifdef GC_WANT_HTTP
-                                                                        // we're listing rides in the api
-                                                                        jc->api->writeRideLine(jc->item, jc->request, jc->response);
-                                                                    #endif
-                                                                    } else {
+                                                                    // search for one to update using serial search,
+                                                                    // if the performance is too slow we can move to
+                                                                    // a binary search, but suspect this ok < 10000 rides
                                                                         double progress= round(double(jc->loading++) / double(jc->cache->rides().count()) * 100.0f);
                                                                         if (progress > jc->lastProgressUpdate) {
                                                                             jc->context->notifyLoadProgress(jc->folder,progress);
@@ -93,7 +90,6 @@ ride: '{' rideelement_list '}'                                  {
                                                                         int index=jc->cache->find(&jc->item);
                                                                         if (index==-1)  qDebug()<<"unable to load:"<<jc->item.fileName<<jc->item.dateTime<<jc->item.weight;
                                                                         else  jc->cache->rides().at(index)->setFrom(jc->item);
-                                                                    }
 
                                                                     // now set our ride item clean again, so we don't
                                                                     // overwrite with prior data
@@ -341,7 +337,7 @@ RideCache::load()
         RideDBContext *jc = new RideDBContext;
         jc->context = context;
         jc->cache = this;
-        jc->api = NULL;
+
         jc->old = false;
         jc->loading = 0;
         jc->lastProgressUpdate = 0.0;
@@ -845,231 +841,4 @@ void RideCache::save(bool opendata, QString filename)
     }
 }
 
-#ifdef GC_WANT_HTTP
-#include "RideMetadata.h"
 
-void
-APIWebService::listRides(QString athlete, HttpRequest &request, HttpResponse &response)
-{
-    listRideSettings settings;
-
-    // the ride db
-    QString ridedb = QString("%1/%2/cache/rideDB.json").arg(home.absolutePath()).arg(athlete);
-    QFile rideDB(ridedb);
-
-    // list activities and associated metrics
-    response.setHeader("Content-Type", "text; charset=ISO-8859-1");
-
-    // not known..
-    if (!rideDB.exists()) {
-        response.setStatus(404);
-        response.write("malformed URL or unknown athlete.\n");
-        return;
-    }
-
-    // intervals or rides?
-    QString intervalsp = request.getParameter("intervals");
-    if (intervalsp.toUpper() == "TRUE") settings.intervals = true;
-    else settings.intervals = false;
-
-    // set user data
-    response.setUserData(&settings);
-
-    // write headings
-    const RideMetricFactory &factory = RideMetricFactory::instance();
-    QVector<const RideMetric *> indexed(factory.metricCount());
-
-    // get metrics indexed in same order as the array
-    foreach(QString name, factory.allMetrics()) {
-
-        const RideMetric *m = factory.rideMetric(name);
-        indexed[m->index()] = m;
-    }
-
-    // was the metric parameter passed?
-    QString metrics(request.getParameter("metrics"));
-
-    // do all ?
-    bool nometrics = false;
-    QStringList wantedNames;
-    if (metrics != "") wantedNames = metrics.split(",");
-
-    // write headings
-    response.bwrite("date, time, filename");
-
-    // don't want metrics, so do it fast by traversing the ride directory
-    if (wantedNames.count() == 1 && wantedNames[0].toUpper() == "NONE") nometrics = true;
-
-    // if intervals, add interval name
-    if (settings.intervals == true) response.bwrite(", interval name, interval type");
-
-    // get metadata definitions into settings
-    QString metadata = request.getParameter("metadata");
-    bool nometa = true;
-    if (metadata.toUpper() != "NONE" && metadata != "") {
-
-        // first lets read in meta config
-        QString metaConfig = home.canonicalPath()+"/metadata.xml";
-        if (!QFile(metaConfig).exists()) metaConfig = ":/xml/metadata.xml";
-
-        // params to readXML - we ignore them
-        QList<KeywordDefinition> keywordDefinitions;
-        QString colorfield;
-        QList<DefaultDefinition> defaultDefinitions;
-
-        RideMetadata::readXML(metaConfig, keywordDefinitions, settings.metafields, colorfield, defaultDefinitions);
-
-        SpecialFields& sp = SpecialFields::getInstance();
-
-        // what is being asked for ?
-        if (metadata.toUpper() == "ALL") {
-
-            // output all metadata
-            foreach(FieldDefinition field, settings.metafields) {
-                // don't do metric overrides !
-                if(!sp.isMetric(field.name)) settings.metawanted << field.name;
-            }
-
-        } else {
-
-            // selected fields - check they exist !
-            QStringList meta = metadata.split(",");
-            foreach(QString field, meta) {
-
-                // don't do metric overrides !
-                if(sp.isMetric(field)) continue;
-
-                // does it exist ?
-                QString lookup = field;
-                lookup.replace("_", " ");
-                foreach(FieldDefinition field, settings.metafields) {
-                    if (field.name == lookup) settings.metawanted << field.name;
-                }
-            }
-        }
-
-        // we found some?
-        if(settings.metawanted.count()) nometa = false;
-    }
-
-    // list 'em by reading the ride cache from disk
-    if ((nometa == false || nometrics == false) && settings.intervals == false) {
-
-        int i=0;
-        foreach(const RideMetric *m, indexed) {
-
-            i++;
-
-            // if limited don't do limited headings
-            QString underscored = m->name().replace(" ","_");
-            if (wantedNames.count() && !wantedNames.contains(underscored)) continue;
-
-            if (m->name().startsWith("BikeScore"))
-                response.bwrite(", BikeScore");
-            else {
-                response.bwrite(", ");
-                response.bwrite(underscored.toLocal8Bit());
-            }
-
-            // index of wanted metrics
-            settings.wanted << (i-1);
-        }
-
-        // do we want metadata too ?
-        foreach(QString meta, settings.metawanted) {
-            meta.replace(" ", "_");
-            response.bwrite(", \"");
-            response.bwrite(meta.toLocal8Bit());
-            response.bwrite("\"");
-        }
-        response.bwrite("\n");
-
-        // parse the rideDB and write a line for each entry
-        if (rideDB.exists() && rideDB.open(QFile::ReadOnly)) {
-
-            // ok, lets read it in
-            QTextStream stream(&rideDB);
-
-            // Read the entire file into a QString -- we avoid using fopen since it
-            // doesn't handle foreign characters well. Instead we use QFile and parse
-            // from a QString
-            QString contents = stream.readAll();
-            rideDB.close();
-
-            // create scanner context for reentrant parsing
-            RideDBContext *jc = new RideDBContext;
-            jc->cache = NULL;
-            jc->api = this;
-            jc->response = &response;
-            jc->request = &request;
-            jc->old = false;
-
-            // clean item
-            jc->item.path = home.absolutePath() + "/activities";
-            jc->item.context = NULL;
-            jc->item.isstale = jc->item.isdirty = jc->item.isedit = false;
-
-            RideDBlex_init(&scanner);
-
-            // inform the parser/lexer we have a new file
-            RideDB_setString(contents, scanner);
-
-            // setup
-            jc->errors.clear();
-
-            // parse it
-            RideDBparse(jc);
-
-            // clean up
-            RideDBlex_destroy(scanner);
-
-            // regardless of errors we're done !
-            delete jc;
-        }
-
-    } else {
-
-        // honour the since parameter
-        QString sincep(request.getParameter("since"));
-        QDate since(1900,01,01);
-        if (sincep != "") since = QDate::fromString(sincep,"yyyy/MM/dd");
-
-        // before parameter
-        QString beforep(request.getParameter("before"));
-        QDate before(3000,01,01);
-        if (beforep != "") before = QDate::fromString(beforep,"yyyy/MM/dd");
-
-        // fast list of rides by traversing the directory
-        response.bwrite("\n"); // headings have no metric columns
-
-        // This will read the user preferences and change the file list order as necessary:
-        QFlags<QDir::Filter> spec = QDir::Files;
-        QStringList names;
-        names << "*"; // anything
-
-        // loop through files, make sure in time range wanted
-        QDir activities(home.absolutePath() + "/" + athlete + "/activities");
-        foreach(QString name, activities.entryList(names, spec, QDir::Name)) {
-
-            // parse it into date and time
-            QDateTime dateTime;
-            if (!RideFile::parseRideFileName(name, &dateTime)) continue; 
-
-            // in range?
-            if (dateTime.date() < since || dateTime.date() > before) continue;
-
-            // is it a backup ?
-            if (name.endsWith(".bak")) continue;
-
-            // out a line
-            response.bwrite(dateTime.date().toString("yyyy/MM/dd").toLocal8Bit());
-            response.bwrite(", ");
-            response.bwrite(dateTime.time().toString("hh:mm:ss").toLocal8Bit());;
-            response.bwrite(", ");
-            response.bwrite(name.toLocal8Bit());
-            response.bwrite("\n");
-        }
-    }
-    response.flush();
-}
-#endif

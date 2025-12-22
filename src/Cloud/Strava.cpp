@@ -22,7 +22,7 @@
 #include "Athlete.h"
 #include "Settings.h"
 #include "Secrets.h"
-#include "mvjson.h"
+//xx #include "mvjson.h"
 #include <QByteArray>
 #include <QHttpMultiPart>
 #include <QJsonDocument>
@@ -462,24 +462,34 @@ Strava::writeFileCompleted()
     try {
 
         // parse !
-        MVJSONReader jsonResponse(response.toStdString());
+        QJsonParseError parseError;
+        QJsonDocument jsonResponse = QJsonDocument::fromJson(response.toUtf8(), &parseError);
 
         // get error field
-        if (jsonResponse.root) {
-            if (jsonResponse.root->hasField("error")) {
-                uploadError = jsonResponse.root->getFieldString("error").c_str();
+        if (parseError.error == QJsonParseError::NoError && jsonResponse.isObject()) {
+            QJsonObject root = jsonResponse.object();
+            if (root.contains("error")) {
+                QJsonValue errorVal = root.value("error");
+                if (errorVal.isString())
+                    uploadError = errorVal.toString();
+                else if (errorVal.isObject()) // sometimes strava returns complex error objects
+                    uploadError = "Upload error"; // simplified, or dig deeper if needed
+                else
+                    uploadError = errorVal.toVariant().toString();
             } else {
                 uploadError = ""; // no error
             }
 
             // get upload_id, but if not available use id
-            //XXX if (jsonResponse.root->hasField("upload_id")) {
-            //XXX     stravaUploadId = jsonResponse.root->getFieldInt("upload_id");
-            //XXX } else if (jsonResponse.root->hasField("id")) {
-            //XXX     stravaUploadId = jsonResponse.root->getFieldInt("id");
-            //XXX } else {
-            //XXX     stravaUploadId = 0;
-            //XXX }
+            /*
+            if (root.contains("upload_id")) {
+                stravaUploadId = root.value("upload_id").toInt();
+            } else if (root.contains("id")) {
+                stravaUploadId = root.value("id").toInt();
+            } else {
+                stravaUploadId = 0;
+            }
+            */
         } else {
             uploadError = "no connection";
         }

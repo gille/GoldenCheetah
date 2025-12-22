@@ -455,37 +455,13 @@ contains(DEFINES, "GC_WANT_R") {
 ### HTTP API WEB SERVICES
 ###==================================
 
-HTPATH = ../contrib/httpserver
-INCLUDEPATH += $$HTPATH
-DEPENDPATH += $$HTPATH
+QT += httpserver network
 
 DEFINES += GC_WANT_HTTP
 
 HEADERS +=  Core/APIWebService.h
 SOURCES +=  Core/APIWebService.cpp
 
-HEADERS +=  $$HTPATH/httpglobal.h \
-            $$HTPATH/httplistener.h \
-            $$HTPATH/httpconnectionhandler.h \
-            $$HTPATH/httpconnectionhandlerpool.h \
-            $$HTPATH/httprequest.h \
-            $$HTPATH/httpresponse.h \
-            $$HTPATH/httpcookie.h \
-            $$HTPATH/httprequesthandler.h \
-            $$HTPATH/httpsession.h \
-            $$HTPATH/httpsessionstore.h \
-            $$HTPATH/staticfilecontroller.h
-SOURCES +=  $$HTPATH/httpglobal.cpp \
-            $$HTPATH/httplistener.cpp \
-            $$HTPATH/httpconnectionhandler.cpp \
-            $$HTPATH/httpconnectionhandlerpool.cpp \
-            $$HTPATH/httprequest.cpp \
-            $$HTPATH/httpresponse.cpp \
-            $$HTPATH/httpcookie.cpp \
-            $$HTPATH/httprequesthandler.cpp \
-            $$HTPATH/httpsession.cpp \
-            $$HTPATH/httpsessionstore.cpp \
-            $$HTPATH/staticfilecontroller.cpp
 
 
 ###=====================================================
@@ -670,7 +646,7 @@ HEADERS += Metrics/Banister.h Metrics/CPSolver.h Metrics/Estimator.h Metrics/Ext
 HEADERS += Planning/PlanningWindow.h
 
 # contrib
-HEADERS += ../contrib/qtsolutions/codeeditor/codeeditor.h ../contrib/qtsolutions/json/mvjson.h \
+HEADERS += ../contrib/qtsolutions/codeeditor/codeeditor.h \
            ../contrib/qtsolutions/flowlayout/flowlayout.h \
            ../contrib/qtsolutions/qwtcurve/qwt_plot_gapped_curve.h  ../contrib/qxt/src/qxtspanslider.h \
            ../contrib/qxt/src/qxtspanslider_p.h ../contrib/qxt/src/qxtstringspinbox.h ../contrib/qzip/zipreader.h \
@@ -788,7 +764,7 @@ SOURCES += Metrics/aBikeScore.cpp Metrics/aCoggan.cpp Metrics/AerobicDecoupling.
 SOURCES += Planning/PlanningWindow.cpp
 
 ## Contributed solutions
-SOURCES += ../contrib/qtsolutions/codeeditor/codeeditor.cpp ../contrib/qtsolutions/json/mvjson.cpp \
+SOURCES += ../contrib/qtsolutions/codeeditor/codeeditor.cpp \
            ../contrib/qtsolutions/flowlayout/flowlayout.cpp \
            ../contrib/qtsolutions/qwtcurve/qwt_plot_gapped_curve.cpp \
            ../contrib/qxt/src/qxtspanslider.cpp ../contrib/qxt/src/qxtstringspinbox.cpp ../contrib/qzip/zip.cpp \

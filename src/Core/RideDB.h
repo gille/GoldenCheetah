@@ -46,9 +46,7 @@
 
 #define RIDEDB_VERSION "2.0"
 
-class APIWebService;
-class HttpResponse;
-class HttpRequest;
+
 
 // using context (we are reentrant)
 struct RideDBContext {
@@ -60,10 +58,7 @@ struct RideDBContext {
     RideCache *cache;
     Context *context;
 
-    // api parms
-    APIWebService *api;
-    HttpRequest *request;
-    HttpResponse *response;
+
 
     // the scanner
     void *scanner;

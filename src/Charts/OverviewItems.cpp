@@ -772,7 +772,8 @@ ZoneOverviewItem::configChanged(qint32)
     QPen axisPen(GColor(CCARDBACKGROUND));
     axisPen.setWidth(1); // almost invisible
     chart->createDefaultAxes();
-    chart->setAxisX(barcategoryaxis, barseries);
+    chart->addAxis(barcategoryaxis, Qt::AlignBottom);
+    barseries->attachAxis(barcategoryaxis);
     barcategoryaxis->setLinePen(axisPen);
     barcategoryaxis->setLineVisible(false);
     chart->axisY(barseries)->setLinePen(axisPen);

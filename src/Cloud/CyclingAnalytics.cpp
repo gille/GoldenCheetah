@@ -19,7 +19,7 @@
 #include "CyclingAnalytics.h"
 #include "Athlete.h"
 #include "Settings.h"
-#include "mvjson.h"
+//xx #include "mvjson.h"
 #include "JsonRideFile.h"
 #include <QByteArray>
 #include <QHttpMultiPart>
@@ -502,13 +502,26 @@ CyclingAnalytics::writeFileCompleted()
 
         // parse the response
         QString response = reply->readAll();
-        MVJSONReader jsonResponse(response.toStdString());
+        QJsonParseError parseError;
+        QJsonDocument jsonResponse = QJsonDocument::fromJson(response.toUtf8(), &parseError);
 
         printd("reply:%s\n", response.toStdString().c_str());
 
         // get values
-        if (jsonResponse.root) uploadError = jsonResponse.root->getFieldString("error").c_str();
-        else uploadError = "unrecognised response.";
+        if (parseError.error == QJsonParseError::NoError && jsonResponse.isObject()) {
+            QJsonObject root = jsonResponse.object();
+            if (root.contains("error"))
+                 uploadError = root.value("error").toString();
+            else
+                 uploadError = "unrecognised response."; // or assume success if no error?
+            
+            // If error is null or none, clear it
+            if (uploadError.toLower() == "none" || uploadError.toLower() == "null") uploadError = "";
+
+            //XXXcyclingAnalyticsUploadId = root.value("upload_id").toInt();
+        } else {
+            uploadError = "unrecognised response.";
+        }
         //XXXcyclingAnalyticsUploadId = jsonResponse.root->getFieldInt("upload_id");
 
     } catch(...) {

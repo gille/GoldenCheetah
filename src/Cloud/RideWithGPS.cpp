@@ -21,7 +21,7 @@
 #include "Secrets.h"
 #include "Settings.h"
 #include "Units.h"
-#include "mvjson.h"
+//xx #include "mvjson.h"
 #include <QByteArray>
 #include <QHttpMultiPart>
 #include <QJsonDocument>
@@ -225,14 +225,19 @@ RideWithGPS::writeFileCompleted()
 
         // parse the response
         QString response = reply->readAll();
-        MVJSONReader jsonResponse(string(response.toLatin1()));
+        QJsonParseError parseError;
+        QJsonDocument jsonResponse = QJsonDocument::fromJson(response.toUtf8(), &parseError);
 
-        // get values
-        if (jsonResponse.root != NULL)
-            uploadError = jsonResponse.root->getFieldString("error").c_str();
-        //XXXif (jsonResponse.root->hasField("trip")) {
-        //XXX    tripid = jsonResponse.root->getField("trip")->getFieldInt("id");
-        //XXX}
+        if (parseError.error == QJsonParseError::NoError && jsonResponse.isObject()) {
+            QJsonObject root = jsonResponse.object();
+            // get values
+            if (root.contains("error"))
+                uploadError = root.value("error").toString();
+            
+            //XXXif (root.contains("trip")) {
+            //XXX    tripid = root.value("trip").toObject().value("id").toInt();
+            //XXX}
+        }
 
     } catch(...) {
 

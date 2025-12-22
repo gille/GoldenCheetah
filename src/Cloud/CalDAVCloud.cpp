@@ -20,7 +20,7 @@
 #include "CalDAVCloud.h"
 #include "Athlete.h"
 #include "Settings.h"
-#include "mvjson.h"
+//xx #include "mvjson.h"
 #include <QByteArray>
 #include <QHttpMultiPart>
 #include <QJsonDocument>

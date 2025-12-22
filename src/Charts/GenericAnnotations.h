@@ -35,6 +35,7 @@ class GenericAnnotation
     public:
         // annotation controller calls this to paint
         virtual void paint(QPainter*, const QStyleOptionGraphicsItem *, QWidget*)=0;
+        virtual ~GenericAnnotation() {}
 };
 
 // gets attached to the chart and is used to register
