@@ -35,6 +35,7 @@
 #include "Seasons.h" // for SearchFilterBox::matches
 #include <QDebug>
 #include <QMutex>
+#include <QRegularExpression>
 #include "lmcurve.h"
 #include "LTMTrend.h" // for LR when copying CP chart filtering mechanism
 #include "WPrime.h" // for LR when copying CP chart filtering mechanism
@@ -1865,40 +1866,40 @@ void Leaf::validateFilter(Context *context, DataFilterRuntime *df, Leaf *leaf)
     case Leaf::Function :
         {
             // is the symbol valid?
-            QRegExp bestValidSymbols("^(apower|power|hr|cadence|speed|torque|vam|xpower|isopower|wpk)$", Qt::CaseInsensitive);
-            QRegExp tizValidSymbols("^(power|hr)$", Qt::CaseInsensitive);
-            QRegExp configValidSymbols("^(cranklength|cp|aetp|ftp|w\\'|pmax|cv|aetv|height|weight|lthr|aethr|maxhr|rhr|units|dob|sex)$", Qt::CaseInsensitive);
-            QRegExp constValidSymbols("^(e|pi)$", Qt::CaseInsensitive); // just do basics for now
-            QRegExp dateRangeValidSymbols("^(start|stop)$", Qt::CaseInsensitive); // date range
-            QRegExp pmcValidSymbols("^(stress|lts|sts|sb|rr|date)$", Qt::CaseInsensitive);
-            QRegExp pmcValidTypes("^(actual|planned|expected)$", Qt::CaseInsensitive);
-            QRegExp smoothAlgos("^(sma|ewma)$", Qt::CaseInsensitive);
-            QRegExp annotateTypes("^(label|lr|hline|vline|voronoi)$", Qt::CaseInsensitive);
-            QRegExp curveData("^(x|y|z|d|t)$", Qt::CaseInsensitive);
-            QRegExp aggregateFunc("^(mean|sum|max|min|count)$", Qt::CaseInsensitive);
-            QRegExp interpolateAlgorithms("^(linear|cubic|akima|steffen)$", Qt::CaseInsensitive);
+            QRegularExpression bestValidSymbols("^(apower|power|hr|cadence|speed|torque|vam|xpower|isopower|wpk)$", QRegularExpression::CaseInsensitiveOption);
+            QRegularExpression tizValidSymbols("^(power|hr)$", QRegularExpression::CaseInsensitiveOption);
+            QRegularExpression configValidSymbols("^(cranklength|cp|aetp|ftp|w\\'|pmax|cv|aetv|height|weight|lthr|aethr|maxhr|rhr|units|dob|sex)$", QRegularExpression::CaseInsensitiveOption);
+            QRegularExpression constValidSymbols("^(e|pi)$", QRegularExpression::CaseInsensitiveOption); // just do basics for now
+            QRegularExpression dateRangeValidSymbols("^(start|stop)$", QRegularExpression::CaseInsensitiveOption); // date range
+            QRegularExpression pmcValidSymbols("^(stress|lts|sts|sb|rr|date)$", QRegularExpression::CaseInsensitiveOption);
+            QRegularExpression pmcValidTypes("^(actual|planned|expected)$", QRegularExpression::CaseInsensitiveOption);
+            QRegularExpression smoothAlgos("^(sma|ewma)$", QRegularExpression::CaseInsensitiveOption);
+            QRegularExpression annotateTypes("^(label|lr|hline|vline|voronoi)$", QRegularExpression::CaseInsensitiveOption);
+            QRegularExpression curveData("^(x|y|z|d|t)$", QRegularExpression::CaseInsensitiveOption);
+            QRegularExpression aggregateFunc("^(mean|sum|max|min|count)$", QRegularExpression::CaseInsensitiveOption);
+            QRegularExpression interpolateAlgorithms("^(linear|cubic|akima|steffen)$", QRegularExpression::CaseInsensitiveOption);
 
             if (leaf->series) { // old way of hand crafting each function in the lexer including support for literal parameter e.g. (power, 1)
 
                 QString symbol = leaf->series->lvalue.n->toLower();
 
-                if (leaf->function == "best" && !bestValidSymbols.exactMatch(symbol)) {
+                if (leaf->function == "best" && !bestValidSymbols.match(symbol).hasMatch()) {
                     DataFiltererrors << QString(tr("invalid data series for best(): %1")).arg(symbol);
                     leaf->inerror = true;
                 }
 
-                if (leaf->function == "tiz" && !tizValidSymbols.exactMatch(symbol)) {
+                if (leaf->function == "tiz" && !tizValidSymbols.match(symbol).hasMatch()) {
                     DataFiltererrors << QString(tr("invalid data series for tiz(): %1")).arg(symbol);
                     leaf->inerror = true;
                 }
 
-                if (leaf->function == "config" && !configValidSymbols.exactMatch(symbol)) {
+                if (leaf->function == "config" && !configValidSymbols.match(symbol).hasMatch()) {
                     DataFiltererrors << QString(tr("invalid literal for config(): %1")).arg(symbol);
                     leaf->inerror = true;
                 }
 
                 if (leaf->function == "const") {
-                    if (!constValidSymbols.exactMatch(symbol)) {
+                    if (!constValidSymbols.match(symbol).hasMatch()) {
                         DataFiltererrors << QString(tr("invalid literal for const(): %1")).arg(symbol);
                         leaf->inerror = true;
                     } else {
@@ -1939,7 +1940,7 @@ void Leaf::validateFilter(Context *context, DataFilterRuntime *df, Leaf *leaf)
                             DataFiltererrors << QString(tr("daterange(start|stop)"));
                         } else {
                             QString symbol = *(leaf->fparms[0]->lvalue.n);
-                            if (!dateRangeValidSymbols.exactMatch(symbol)) {
+                            if (!dateRangeValidSymbols.match(symbol).hasMatch()) {
                                 leaf->inerror = true;
                                 DataFiltererrors << QString(tr("daterange(start|stop) - unknown symbol '%1'")).arg(symbol);
                             }
@@ -1980,14 +1981,14 @@ void Leaf::validateFilter(Context *context, DataFilterRuntime *df, Leaf *leaf)
                     } else {
 
                         QRegExp reseries("^(hr|power|pace|fatigue)$", Qt::CaseInsensitive);
-                        QRegExp refield("^(name|description|units|low|high|time|percent)$", Qt::CaseInsensitive);
+                        QRegularExpression refield("^(name|description|units|low|high|time|percent)$", QRegularExpression::CaseInsensitiveOption);
 
                         // lets check the combinations
                         QString series = *leaf->fparms[0]->lvalue.n;
                         QString field = *leaf->fparms[1]->lvalue.n;
 
                         if (!reseries.exactMatch(series)) inerror=true;
-                        if (!refield.exactMatch(field)) inerror=true;
+                        if (!refield.match(field).hasMatch()) inerror=true;
                     }
 
                     // same error for any badly formed function call
@@ -2076,7 +2077,7 @@ void Leaf::validateFilter(Context *context, DataFilterRuntime *df, Leaf *leaf)
                             DataFiltererrors << QString(tr("aggregate(vector, by, func) func must be one of mean|sum|max|min|count."));
                         } else {
                             QString symbol = *(leaf->fparms[2]->lvalue.n);
-                            if (!aggregateFunc.exactMatch(symbol)) {
+                            if (!aggregateFunc.match(symbol).hasMatch()) {
                                 leaf->inerror = true;
                                 DataFiltererrors << QString(tr("unknown function '%1', must be one of mean|sum|max|min|count.").arg(symbol));
                             }
@@ -2115,7 +2116,7 @@ void Leaf::validateFilter(Context *context, DataFilterRuntime *df, Leaf *leaf)
 
                         // 4 parameters and first is a symbol, lets check we know it
                         QString symbol = *(leaf->fparms[0]->lvalue.n);
-                        if (!interpolateAlgorithms.exactMatch(symbol)) {
+                        if (!interpolateAlgorithms.match(symbol).hasMatch()) {
                             leaf->inerror = true;
                             DataFiltererrors << QString(tr("unknown algorithm '%1', must be one of linear, cubic, akima or steffen.").arg(symbol));
                         } else {
@@ -2290,14 +2291,14 @@ void Leaf::validateFilter(Context *context, DataFilterRuntime *df, Leaf *leaf)
                     } else {
 
                         // check they are all valid metrics
-                        QRegExp symbols("^(name|start|stop|type|test|color|route|selected|date|time|filename)$");
+                        QRegularExpression symbols("^(name|start|stop|type|test|color|route|selected|date|time|filename)$");
                         for(int i=0; i<leaf->fparms.count(); i++) {
                             if (leaf->fparms[i]->type != Leaf::Symbol) {
                                 leaf->inerror = true;
                                 DataFiltererrors << QString(tr("only metric names are supported")).arg(leaf->function);
                             } else {
                                 QString symbol=*(leaf->fparms[0]->lvalue.n);
-                                if (!symbols.exactMatch(symbol) && df->lookupMap.value(symbol,"") == "") {
+                                if (!symbols.match(symbol).hasMatch() && df->lookupMap.value(symbol,"") == "") {
                                     inerror = true;
                                     DataFiltererrors << QString(tr("unknown metric %1")).arg(symbol);
                                 }
@@ -2359,9 +2360,9 @@ void Leaf::validateFilter(Context *context, DataFilterRuntime *df, Leaf *leaf)
 
                     } else if (leaf->fparms.count() >= 1) {
 
-                        QRegExp symbols("^(name|start|stop|type|test|color|route|selected|date|time|filename)$");
+                        QRegularExpression symbols("^(name|start|stop|type|test|color|route|selected|date|time|filename)$");
                         QString symbol=*(leaf->fparms[0]->lvalue.n);
-                        if (!symbols.exactMatch(symbol) && df->lookupMap.value(symbol,"") == "") {
+                        if (!symbols.match(symbol).hasMatch() && df->lookupMap.value(symbol,"") == "") {
                             leaf->inerror = true;
                             DataFiltererrors << QString(tr("invalid symbol '%1', should be either a metric name or 'name|start|stop|type|test|color|route|selected|date|time|filename''").arg(symbol));
 
@@ -2391,9 +2392,9 @@ void Leaf::validateFilter(Context *context, DataFilterRuntime *df, Leaf *leaf)
 
                     } else if (leaf->fparms.count() == 1) {
 
-                        QRegExp symbols("^(name|date|priority|description)$");
+                        QRegularExpression symbols("^(name|date|priority|description)$");
                         QString symbol=*(leaf->fparms[0]->lvalue.n);
-                        if (!symbols.exactMatch(symbol) && df->lookupMap.value(symbol,"") == "") {
+                        if (!symbols.match(symbol).hasMatch() && df->lookupMap.value(symbol,"") == "") {
                             leaf->inerror = true;
                             DataFiltererrors << QString(tr("invalid symbol '%1', should be 'name|date|priority|description''").arg(symbol));
 
@@ -2620,7 +2621,7 @@ void Leaf::validateFilter(Context *context, DataFilterRuntime *df, Leaf *leaf)
                     } else {
                         // check series data
                         QString symbol = *(leaf->fparms[1]->lvalue.n);
-                        if (!curveData.exactMatch(symbol)) {
+                        if (!curveData.match(symbol).hasMatch()) {
                             DataFiltererrors << QString(tr("'%1' is not a valid, x, y, z, d or t expected").arg(symbol));
                             leaf->inerror = true;
                         }
@@ -2710,7 +2711,7 @@ void Leaf::validateFilter(Context *context, DataFilterRuntime *df, Leaf *leaf)
                         QString type = *(leaf->fparms[0]->lvalue.n);
 
                         // is the type of annotation supported?
-                        if (!annotateTypes.exactMatch(type)) {
+                        if (!annotateTypes.match(type).hasMatch()) {
                             leaf->inerror = true;
                             DataFiltererrors << QString(tr("annotation type '%1' not available").arg(type));
                         } else {
@@ -2761,7 +2762,7 @@ void Leaf::validateFilter(Context *context, DataFilterRuntime *df, Leaf *leaf)
                     } else {
 
                         QString algo = *(leaf->fparms[1]->lvalue.n);
-                        if (!smoothAlgos.exactMatch(algo)) {
+                        if (!smoothAlgos.match(algo).hasMatch()) {
                             leaf->inerror = true;
                             DataFiltererrors << QString(tr("smoothing algorithm '%1' not available").arg(algo));
                         } else {
@@ -2773,9 +2774,9 @@ void Leaf::validateFilter(Context *context, DataFilterRuntime *df, Leaf *leaf)
                                     DataFiltererrors << QString(tr("smooth(list, sma, forward|centered|backward, windowsize"));
 
                                 } else {
-                                    QRegExp parms("^(forward|centered|backward)$");
+                                    QRegularExpression parms("^(forward|centered|backward)$");
                                     QString parm1 = *(leaf->fparms[2]->lvalue.n);
-                                    if (!parms.exactMatch(parm1)) {
+                                    if (!parms.match(parm1).hasMatch()) {
 
                                         leaf->inerror = true;
                                         DataFiltererrors << QString(tr("smooth(list, sma, forward|centered|backward, windowsize"));
@@ -2886,14 +2887,14 @@ void Leaf::validateFilter(Context *context, DataFilterRuntime *df, Leaf *leaf)
                         validateFilter(context, df, leaf->fparms[0]);
 
                         QString symbol=*(leaf->fparms[1]->lvalue.n);
-                        if (!pmcValidSymbols.exactMatch(symbol)) {
+                        if (!pmcValidSymbols.match(symbol).hasMatch()) {
                             leaf->inerror = true;
                             DataFiltererrors << QString(tr("invalid PMC series '%1'").arg(symbol));
                         }
 
                         if (leaf->fparms.count() == 3) {
                             QString type=*(leaf->fparms[2]->lvalue.n);
-                            if (!pmcValidTypes.exactMatch(type)) {
+                            if (!pmcValidTypes.match(type).hasMatch()) {
                                 leaf->inerror = true;
                                 DataFiltererrors << QString(tr("invalid PMC type '%1'").arg(type));
                             }
@@ -2914,7 +2915,7 @@ void Leaf::validateFilter(Context *context, DataFilterRuntime *df, Leaf *leaf)
 
                         if (leaf->fparms.count() >= 2) {
                             QString type=*(leaf->fparms[1]->lvalue.n);
-                            if (!pmcValidTypes.exactMatch(type)) {
+                            if (!pmcValidTypes.match(type).hasMatch()) {
                                 leaf->inerror = true;
                                 DataFiltererrors << QString(tr("invalid PMC type '%1'").arg(type));
                             }
@@ -2951,8 +2952,8 @@ void Leaf::validateFilter(Context *context, DataFilterRuntime *df, Leaf *leaf)
 
                         // check value
                         QString value = third->signature();
-                        QRegExp banSymbols("^(nte|pte|perf|cp|date)$", Qt::CaseInsensitive);
-                        if (!banSymbols.exactMatch(value)) {
+                        QRegularExpression banSymbols("^(nte|pte|perf|cp|date)$", QRegularExpression::CaseInsensitiveOption);
+                        if (!banSymbols.match(value).hasMatch()) {
                             leaf->inerror = true;
                             DataFiltererrors << QString("unknown %1, should be nte,pte,perf or cp.").arg(value);
                         }
@@ -3099,8 +3100,8 @@ void Leaf::validateFilter(Context *context, DataFilterRuntime *df, Leaf *leaf)
 
                             // check symbol name if it is a symbol
                             if (leaf->fparms[1]->type == Leaf::Symbol) {
-                                QRegExp estimateValidSymbols(name == "estimate" ? "^(cp|ftp|pmax|w')$" : "^(cp|ftp|pmax|w'|date)", Qt::CaseInsensitive);
-                                if (!estimateValidSymbols.exactMatch(*(leaf->fparms[1]->lvalue.n))) {
+                                QRegularExpression estimateValidSymbols(name == "estimate" ? "^(cp|ftp|pmax|w')$" : "^(cp|ftp|pmax|w'|date)", QRegularExpression::CaseInsensitiveOption);
+                                if (!estimateValidSymbols.match(*(leaf->fparms[1]->lvalue.n)).hasMatch()) {
                                     leaf->inerror = leaf->fparms[1]->inerror = true;
                                     DataFiltererrors << QString(tr("%1 function expects parameter or duration as second parameter")).arg(name);
                                 }
@@ -3855,7 +3856,7 @@ Result Leaf::eval(DataFilterRuntime *df, Leaf *leaf, const Result &x, long it, R
 
             QVector<QString> list;
 
-            QRegExp symbols("^(name|start|stop|type|test|color|route|selected|date|time|filename)$");
+            QRegularExpression symbols("^(name|start|stop|type|test|color|route|selected|date|time|filename)$");
             for(int i=0; i<leaf->fparms.count(); i++) {
 
                 // symbol dereference
@@ -3875,7 +3876,7 @@ Result Leaf::eval(DataFilterRuntime *df, Leaf *leaf, const Result &x, long it, R
                 else if (wantname  && symbol == "route") list << tr("Route");
                 else if (wantname  && symbol == "selected") list << tr("Selected");
                 else if (wantname  && symbol == "filename") list << tr("File Name");
-                else if (wantunit && symbols.exactMatch(symbol))
+                else if (wantunit && symbols.match(symbol).hasMatch())
                     list << "";
                 else {
                     if (e && m) {
@@ -8245,7 +8246,7 @@ Result Leaf::eval(DataFilterRuntime *df, Leaf *leaf, const Result &x, long it, R
             else return Result(rhs.number());
         }
         case MATCHES:
-            if (!lhs.isNumber && !rhs.isNumber) return Result(QRegExp(rhs.string()).exactMatch(lhs.string()));
+            if (!lhs.isNumber && !rhs.isNumber) return Result(QRegularExpression(rhs.string()).match(lhs.string()).hasMatch());
             else return Result(false);
             break;
 

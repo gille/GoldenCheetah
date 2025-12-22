@@ -431,110 +431,6 @@ QHttpServerResponse APIWebService::handleListActivity(const QString &athlete, co
     QString accept = QString::fromUtf8(request.value("Accept"));
     if (accept.contains("json", Qt::CaseInsensitive)) isJson = true;
 
-<<<<<<< HEAD
-        // close as we will open properly below
-        file.close();
-
-        // what format to use ?
-        QString format(request.getParameter("format"));
-        if (format == "") {
-
-            // if not passed in the URL then is content type
-            // caller can accept listed in the header?
-            // there is probably a more complete way of handling
-            // wildcards etc, but the user can always force via     
-            // the format parameter in the URL
-            foreach(QByteArray accepts, request.getHeaders("Accept")) {
-                if (accepts == "application/json") format="json";
-                if (accepts == "text/csv") format="csv";
-                if (accepts == "application/vnd.garmin.tcx") format="tcx";
-                if (accepts == "application/vnd.trainingpeaks.pwx") format="pwx";
-                if (accepts == "application/xml" || accepts == "text/xml") format="tcx";
-                if (format != "") break;
-            }
-        }
-
-        // default to json
-        if (format == "") format = "json";
-
-        // lets go with tcx/pwx as xml, full csv (not powertap) and GC json
-        QStringList formats;
-        formats << "tcx"; // garmin training centre
-        formats << "csv"; // full csv list (not powertap)
-        formats << "json"; // gc json
-        formats << "pwx"; // gc json
-
-        // unsupported format
-        if (!formats.contains(format)) {
-            response.setStatus(500);
-            response.write("unsupported format; we support:");
-            foreach(QString fmt, formats) {
-                response.write(" ");
-                response.write(fmt.toLocal8Bit());
-            }
-            response.write("\r\n");
-            return;
-        } else {
-
-            // set the content type appropriately
-            if (format == "tcx") response.setHeader("Content-Type", "application/vnd.garmin.tcx+xml; charset=ISO-8859-1");
-            if (format == "csv") response.setHeader("Content-Type", "text/csv; charset=ISO-8859-1");
-            if (format == "json") response.setHeader("Content-Type", "application/json; charset=ISO-8859-1");
-            if (format == "pwx") response.setHeader("Content-Type", "application/vnd.trainingpeaks.pwx+xml; charset=ISO-8859-1");
-        }
-
-        // lets read the file in as a ridefile
-        QStringList errors;
-        RideFile *f = RideFileFactory::instance().openRideFile(NULL, file, errors);
-
-        // error reading (!)
-        if (f == NULL) {
-            response.setStatus(500);
-            foreach(QString error, errors) {
-                response.write(error.toLocal8Bit());
-                response.write("\r\n");
-            }
-            return;
-        }
-
-        // write out to a temporary file in
-        // the format requested
-        bool success;
-        QTemporaryFile tempfile; // deletes file when goes out of scope
-        QString tempname;
-        if (tempfile.open()) tempname = tempfile.fileName();
-        else {
-            response.setStatus(500);
-            response.write("error opening temporary file");
-            return;
-        }
-        QFile out(tempname);
-
-        if (format == "csv") {
-            CsvFileReader writer;
-            success = writer.writeRideFile(NULL, f, out, CsvFileReader::gc);
-        } else {
-            success = RideFileFactory::instance().writeRideFile(NULL, f, out, format);
-        }
-
-        if (success) {
-
-            // read in the whole thing
-            out.open(QFile::ReadOnly | QFile::Text);
-            QTextStream in(&out);
-            contents = in.readAll();
-            out.close();
-
-            // write back in one hit
-            response.write(contents.toLocal8Bit(), true);
-            return;
-
-        } else {
-            response.setStatus(500);
-            response.write("unable to write output, internal error.\n");
-            return;
-        }
-=======
     // Load ride
     QString fullPath = home.absolutePath() + "/" + athlete + "/activities/" + id;
     if (!QFile::exists(fullPath)) return QHttpServerResponse(QHttpServerResponder::StatusCode::NotFound);
@@ -543,7 +439,6 @@ QHttpServerResponse APIWebService::handleListActivity(const QString &athlete, co
     QFile file(fullPath);
     RideFile *rf = RideFileFactory::instance().openRideFile(nullptr, file, errors);
     if (!rf) return QHttpServerResponse(QHttpServerResponder::StatusCode::InternalServerError);
->>>>>>> bfcd32d39 (QT Cleanup)
 
     // Return as JSON or XML/PWX/etc
     if (isJson) {

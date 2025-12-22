@@ -1014,14 +1014,9 @@ GcChartWindow::chartPropertiesFromString(QString contents) {
 
     QList<QMap<QString,QString> > returning;
 
-<<<<<<< HEAD
-    // parse via MVJson
-    MVJSONReader json(string(contents.toStdString()));
-=======
     // parse via QJsonDocument to avoid mvjson dependency
     QJsonParseError parseError;
     QJsonDocument json = QJsonDocument::fromJson(contents.toUtf8(), &parseError);
->>>>>>> bfcd32d39 (QT Cleanup)
 
     if (parseError.error == QJsonParseError::NoError && json.isObject()) {
         QJsonObject root = json.object();
