@@ -23,6 +23,7 @@
 #include <QtHttpServer>
 #include <QTcpServer>
 #include <QDir>
+#include <QDate>
 #include "RideItem.h"
 #include "RideMetadata.h"
 
@@ -61,7 +62,7 @@ class APIWebService : public QObject
         QHttpServerResponse handleListMMP(const QString &athlete, const QString &sub, const QHttpServerRequest &request);
         
         // Helpers
-        // ... (we'll implement logic in cpp, helper signatures might likely change)
+        QHttpServerResponse handleListRidesFast(const QString &athlete, const QDate &since, const QDate &before);
 };
 
 #endif

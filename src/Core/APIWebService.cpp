@@ -38,6 +38,9 @@
 #include "../Metrics/HrZones.h"
 #include "Measures.h"
 #include "Zones.h"
+#include "RideMetadata.h"
+#include "SpecialFields.h"
+#include "RideFile.h"
 
 APIWebService::APIWebService(QDir home, QObject *parent) : QObject(parent), home(home)
 {
@@ -172,9 +175,14 @@ QHttpServerResponse APIWebService::handleListRides(const QString &athlete, const
     listRideSettings settings;
     settings.intervals = intervals;
     
-    // metrics
+    // Get metric factory for lookup
     const RideMetricFactory &factory = RideMetricFactory::instance();
-    if (metrics != "") {
+    
+    // Handle ?metrics=NONE for fast directory-only listing
+    bool nometrics = false;
+    if (metrics.toUpper() == "NONE") {
+        nometrics = true;
+    } else if (metrics != "") {
         foreach(QString metric, metrics.split(",")) {
             QString name = metric.trimmed();
             if (factory.haveMetric(name)) {
@@ -184,12 +192,52 @@ QHttpServerResponse APIWebService::handleListRides(const QString &athlete, const
         }
     }
 
-    // metadata
-    if (metadata != "") {
+    // metadata - support "ALL" like the old implementation with full metadata.xml parsing
+    bool nometa = true;
+    if (metadata.toUpper() == "ALL") {
+        // Load from metadata.xml for full compatibility
+        QString metaConfig = home.canonicalPath() + "/metadata.xml";
+        if (!QFile(metaConfig).exists()) metaConfig = ":/xml/metadata.xml";
+        
+        QList<KeywordDefinition> keywordDefinitions;
+        QList<FieldDefinition> fieldDefinitions;
+        QString colorfield;
+        QList<DefaultDefinition> defaultDefinitions;
+        
+        RideMetadata::readXML(metaConfig, keywordDefinitions, fieldDefinitions, colorfield, defaultDefinitions);
+        
+        SpecialFields& sp = SpecialFields::getInstance();
+        foreach(FieldDefinition field, fieldDefinitions) {
+            // don't do metric overrides!
+            if(!sp.isMetric(field.name)) settings.metawanted << field.name;
+        }
+        if (settings.metawanted.count()) nometa = false;
+    } else if (metadata != "") {
         foreach(QString meta, metadata.split(",")) settings.metawanted << meta.trimmed();
+        if (settings.metawanted.count()) nometa = false;
     }
 
     QByteArray body;
+
+    // Write CSV header row (matching old implementation)
+    body.append("date, time, filename");
+    if (settings.intervals) {
+        body.append(", interval name, interval type");
+    }
+    // Add metric headers
+    if (settings.wanted.count()) {
+        foreach(int index, settings.wanted) {
+            QString name = factory.allMetrics().value(index);
+            name.replace(" ", "_");
+            body.append(QString(", %1").arg(name).toLocal8Bit());
+        }
+    }
+    // Add metadata headers
+    foreach(QString meta, settings.metawanted) {
+        meta.replace(" ", "_");
+        body.append(QString(", \"%1\"").arg(meta).toLocal8Bit());
+    }
+    body.append("\n");
 
     // Filters
     QString sincep = q.queryItemValue("since");
@@ -199,6 +247,12 @@ QHttpServerResponse APIWebService::handleListRides(const QString &athlete, const
     QString beforep = q.queryItemValue("before");
     QDate before(3000,01,01);
     if (beforep != "") before = QDate::fromString(beforep,"yyyy/MM/dd");
+
+    // Fast path: if no metrics, no metadata, and no intervals are requested,
+    // just traverse the activities directory directly (much faster)
+    if (nometrics && nometa && !intervals) {
+        return handleListRidesFast(athlete, since, before);
+    }
 
     // Helper to write line
     auto writeLine = [&](RideItem *item) {
@@ -303,6 +357,40 @@ QHttpServerResponse APIWebService::handleListRides(const QString &athlete, const
         writeLine(&ride);
     }
 
+    return QHttpServerResponse("text/csv; charset=ISO-8859-1", body);
+}
+
+// Fast path implementation for ?metrics=NONE
+QHttpServerResponse APIWebService::handleListRidesFast(const QString &athlete, const QDate &since, const QDate &before)
+{
+    QByteArray body;
+    body.append("date, time, filename\n");
+    
+    // Fast list of rides by traversing the directory directly
+    QDir activities(home.absolutePath() + "/" + athlete + "/activities");
+    QStringList names;
+    names << "*"; // anything
+    
+    foreach(QString name, activities.entryList(names, QDir::Files, QDir::Name)) {
+        // parse it into date and time
+        QDateTime dateTime;
+        if (!RideFile::parseRideFileName(name, &dateTime)) continue;
+        
+        // in range?
+        if (dateTime.date() < since || dateTime.date() > before) continue;
+        
+        // is it a backup?
+        if (name.endsWith(".bak")) continue;
+        
+        // out a line
+        body.append(dateTime.date().toString("yyyy/MM/dd").toLocal8Bit());
+        body.append(", ");
+        body.append(dateTime.time().toString("hh:mm:ss").toLocal8Bit());
+        body.append(", ");
+        body.append(name.toLocal8Bit());
+        body.append("\n");
+    }
+    
     return QHttpServerResponse("text/csv; charset=ISO-8859-1", body);
 }
 
