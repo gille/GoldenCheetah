@@ -176,3 +176,7 @@ unix {
 
     QWT_CONFIG     += QwtPkgConfig
 }
+
+win32-msvc* {
+    QMAKE_CXXFLAGS += /MP
+}

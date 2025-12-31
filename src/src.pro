@@ -100,6 +100,7 @@ win32-msvc* {
     isEmpty(WINKIT_INSTALL) WINKIT_INSTALL= "C:/Program Files (x86)/Windows Kits/8.1/Lib/winv6.3/um/x64"
     LIBS += -L$${WINKIT_INSTALL} -lGdi32 -lUser32
     CONFIG += force_debug_info
+    QMAKE_CXXFLAGS += /MP
 } else {
     # gnu toolchain wants math libs
     LIBS += -lm
