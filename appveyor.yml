@@ -109,6 +109,8 @@ install:
 # Get config
 - cmd: copy qwt\qwtconfig.pri.in qwt\qwtconfig.pri
 - cmd: copy c:\libs\gcconfig64Qt6-Release.appveyor.pri src\gcconfig.pri
+# Enable PCH for Windows to speed up build
+- cmd: echo GC_USE_PCH=true >> src\gcconfig.pri
 
 # Get jom
 - cmd: if not exist jom_1_1_3.zip appveyor DownloadFile "https://download.qt.io/official_releases/jom/jom_1_1_3.zip"
