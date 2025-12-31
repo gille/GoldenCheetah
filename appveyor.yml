@@ -6,9 +6,9 @@ branches:
     - master
 
 image:
-  - macos-sonoma
-  - Ubuntu2204
   - Visual Studio 2022
+  #- macos-sonoma
+  #- Ubuntu2204
 
 environment:
   APPVEYOR_SAVE_CACHE_ON_ERROR: true
@@ -108,6 +108,9 @@ install:
 
 # Get config
 - cmd: copy qwt\qwtconfig.pri.in qwt\qwtconfig.pri
+# Force QWT Release build to prevent parallel build race condition
+- cmd: sed -i "s|debug_and_release|release|" qwt/qwtbuild.pri
+- cmd: sed -i "s|build_all| |" qwt/qwtbuild.pri
 - cmd: copy c:\libs\gcconfig64Qt6-Release.appveyor.pri src\gcconfig.pri
 # Enable PCH for Windows to speed up build
 - cmd: echo GC_USE_PCH=true >> src\gcconfig.pri
@@ -215,12 +218,10 @@ build_script:
 
 # Windows
 - cmd: qmake.exe build.pro -r -spec win32-msvc
-- cmd: if not exist qwt\lib\qwt.lib jom -j2 sub-qwt
 - cmd: jom -j2
 
 # Linux / macOS
 - sh: qmake build.pro -r QMAKE_CXXFLAGS_WARN_ON+="-Wno-unused-private-field -Wno-c++11-narrowing -Wno-deprecated-declarations -Wno-deprecated-register -Wno-nullability-completeness -Wno-sign-compare -Wno-inconsistent-missing-override" QMAKE_CFLAGS_WARN_ON+="-Wno-deprecated-declarations -Wno-sign-compare"
-- sh: if test ! -f qwt/lib/libqwt.a; then make -j2 sub-qwt; fi
 - sh: make -j2
 
 after_build:

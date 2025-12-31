@@ -1,5 +1,4 @@
 TEMPLATE = subdirs
-CONFIG += ordered
 
 # Include configuration to check for GC_WANT_PYTHON
 include(src/gcconfig.pri)
@@ -19,10 +18,12 @@ contains(DEFINES, GC_WANT_PYTHON) {
     
     # Ordered list of subdirectories to build
     # qwt -> siplib -> gc -> unittests
+    unittests.depends = gc
     SUBDIRS = qwt siplib gc unittests
 } else {
     gc.depends = qwt
     # Ordered list of subdirectories to build
     # qwt -> gc -> unittests
+    unittests.depends = gc
     SUBDIRS = qwt gc unittests
 }
