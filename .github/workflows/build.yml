@@ -1,0 +1,162 @@
+name: Build GoldenCheetah
+
+on:
+  push:
+    branches: [ master, '*' ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  PYTHON_VERSION: "3.11"
+
+  # Secrets
+  GC_GOOGLE_CALENDAR_CLIENT_SECRET: ${{ secrets.GC_GOOGLE_CALENDAR_CLIENT_SECRET || '\\\"development_key\\\"' }}
+  GC_GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GC_GOOGLE_DRIVE_CLIENT_ID || '\\\"development_key\\\"' }}
+  GC_GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GC_GOOGLE_DRIVE_CLIENT_SECRET || '\\\"development_key\\\"' }}
+  GC_GOOGLE_DRIVE_API_KEY: ${{ secrets.GC_GOOGLE_DRIVE_API_KEY || '\\\"development_key\\\"' }}
+  GC_CLOUD_OPENDATA_SECRET: ${{ secrets.GC_CLOUD_OPENDATA_SECRET || '\\\"development_key\\\"' }}
+  GC_WITHINGS_CONSUMER_SECRET: ${{ secrets.GC_WITHINGS_CONSUMER_SECRET || '\\\"development_key\\\"' }}
+  GC_NOKIA_CLIENT_SECRET: ${{ secrets.GC_NOKIA_CLIENT_SECRET || '\\\"development_key\\\"' }}
+  GC_DROPBOX_CLIENT_SECRET: ${{ secrets.GC_DROPBOX_CLIENT_SECRET || '\\\"development_key\\\"' }}
+  GC_STRAVA_CLIENT_SECRET: ${{ secrets.GC_STRAVA_CLIENT_SECRET || '\\\"development_key\\\"' }}
+  GC_CYCLINGANALYTICS_CLIENT_SECRET: ${{ secrets.GC_CYCLINGANALYTICS_CLIENT_SECRET || '\\\"development_key\\\"' }}
+  GC_CLOUD_DB_BASIC_AUTH: ${{ secrets.GC_CLOUD_DB_BASIC_AUTH || '\\\"development_key\\\"' }}
+  GC_CLOUD_DB_APP_NAME: ${{ secrets.GC_CLOUD_DB_APP_NAME || '\\\"development_key\\\"' }}
+  GC_POLARFLOW_CLIENT_SECRET: ${{ secrets.GC_POLARFLOW_CLIENT_SECRET || '\\\"development_key\\\"' }}
+  GC_SPORTTRACKS_CLIENT_SECRET: ${{ secrets.GC_SPORTTRACKS_CLIENT_SECRET || '\\\"development_key\\\"' }}
+  GC_RWGPS_API_KEY: ${{ secrets.GC_RWGPS_API_KEY || '\\\"development_key\\\"' }}
+  GC_NOLIO_CLIENT_ID: ${{ secrets.GC_NOLIO_CLIENT_ID || '\\\"development_key\\\"' }}
+  GC_NOLIO_SECRET: ${{ secrets.GC_NOLIO_SECRET || '\\\"development_key\\\"' }}
+  GC_XERT_CLIENT_SECRET: ${{ secrets.GC_XERT_CLIENT_SECRET || '\\\"development_key\\\"' }}
+  GC_AZUM_CLIENT_SECRET: ${{ secrets.GC_AZUM_CLIENT_SECRET || '\\\"development_key\\\"' }}
+  GC_TRAINERDAY_API_KEY: ${{ secrets.GC_TRAINERDAY_API_KEY || '\\\"development_key\\\"' }}
+
+jobs:
+  build:
+    name: ${{ matrix.config.name }}
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {
+              name: "Windows MSVC",
+              os: windows-2022,
+              qt_version: "6.8.1",
+              qt_arch: win64_msvc2022_64,
+              shell: "pwsh"
+            }
+          - {
+              name: "Ubuntu 24.04",
+              os: ubuntu-24.04,
+              qt_version: "6.8.1",
+              qt_arch: linux_gcc_64,
+              shell: "bash"
+            }
+          - {
+              name: "macOS Intel",
+              os: macos-15,
+              qt_version: "6.5.3",
+              qt_arch: clang_64,
+              shell: "bash"
+            }
+          - {
+              name: "macOS ARM",
+              os: macos-14,
+              qt_version: "6.5.3",
+              qt_arch: clang_64,
+              shell: "bash"
+            }
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: ${{ matrix.config.qt_version }}
+          arch: ${{ matrix.config.qt_arch }}
+          cache: true
+          modules: 'qtwebengine qtcharts qtserialport qtmultimedia qtconnectivity qtwebchannel qtpositioning qt5compat'
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: github/windows/install.ps1
+
+      - name: Install Dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: bash github/linux/install.sh
+
+      - name: Install Dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: bash github/macos/install.sh
+
+      - name: Setup MSVC (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure (Windows)
+        if: runner.os == 'Windows'
+        run: github/windows/before_build.ps1
+
+      - name: Configure (Linux)
+        if: runner.os == 'Linux'
+        run: bash github/linux/before_build.sh
+
+      - name: Configure (macOS)
+        if: runner.os == 'macOS'
+        run: bash github/macos/before_build.sh
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          qmake build.pro -r -spec win32-msvc
+          # Windows can't build QWT in parallel.
+          jom -j1 sub-qwt
+          # Build main source jom autodetects number of cores.
+          jom sub-src
+
+      - name: Build (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          qmake build.pro -r
+          if [ "$(uname)" == "Darwin" ]; then
+            CORES=$(sysctl -n hw.ncpu)
+          else
+            CORES=$(nproc)
+          fi
+          echo "Building with $CORES cores"
+          make -j$CORES sub-qwt
+          make -j$CORES sub-src
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        run: github/windows/after_build.ps1
+
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash github/linux/after_build.sh
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: bash github/macos/after_build.sh
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: GoldenCheetah-${{ matrix.config.name }}
+          path: |
+            GoldenCheetah*.dmg
+            GoldenCheetah*.AppImage
+            GoldenCheetah*.exe
+            GCversion*.txt

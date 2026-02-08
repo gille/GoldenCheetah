@@ -3,3 +3,4 @@
 src/translations/* linguist-documentation
 src/Resources/translations/* linguist-documentation
 test/* linguist-vendored
+*.sh text eol=lf
