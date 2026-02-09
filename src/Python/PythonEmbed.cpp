@@ -38,6 +38,32 @@
 #define PYTHON3_VERSION PY_MINOR_VERSION
 #endif
 
+#include <stdarg.h>
+#include <QFile>
+#include <QStandardPaths>
+#include <QDir>
+#include <QDateTime>
+
+// Buffer for debug logs
+static std::vector<QString> g_debugBuffer;
+
+// Log helper
+void debugLog(const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    QString msg;
+    //msg.vsprintf(fmt, args);
+    msg = QString::asprintf(fmt, args);
+    va_end(args);
+    g_debugBuffer.push_back(msg);
+    // Also print to stderr
+    fprintf(stderr, "%s", msg.toLocal8Bit().constData());
+}
+
+// Redefine printd to use our logger
+#undef printd
+#define printd(...) debugLog(__VA_ARGS__)
+
 // global instance of embedded python
 PythonEmbed *python;
 PyThreadState *mainThreadState;
@@ -329,6 +355,9 @@ PythonEmbed::PythonEmbed(const bool verbose, const bool interactive) : verbose(v
             loaded = true;
 
             printd("Embedding completes\n");
+
+            // Verify dependencies
+            checkDependencies();
             return;
         } // sys != NULL
     } // pythonInstalled == true
@@ -338,13 +367,79 @@ PythonEmbed::PythonEmbed(const bool verbose, const bool interactive) : verbose(v
     // Notify user of the problem (they can disable Python in preferences if they don't want to see this)
     // Note: We don't permanently disable Python here - the user might fix the issue (install Python,
     // fix PYTHONHOME, etc.) and we should try again on next startup.
+    // Dump debug log.
+    for (const auto &line : g_debugBuffer) {
+        qDebug() << line;
+    }
+
     QMessageBox msg(QMessageBox::Warning, QObject::tr("Python not available"),
                     QObject::tr("GoldenCheetah was built with Python 3.%1 but could not initialize Python.\n\n"
                                 "Please ensure Python 3.%1 is installed and in your PATH.\n"
-                                "You can disable Python in Options > General if you don't need it.").arg(PYTHON3_VERSION));
+                                "You can disable Python in Options > General if you don't need it.\n\n").arg(PYTHON3_VERSION));
     msg.exec();
     loaded=false;
     return;
+}
+
+bool PythonEmbed::checkDependencies()
+{
+    printd("Checking python dependencies...\n");
+    // List of modules to check from requirements.txt
+    const char *modules[] = {
+        "sip", "numpy", "pandas", "scipy", "lmfit", "plotly", "importlib_metadata", NULL
+    };
+
+    bool success = true;
+    QString missing;
+
+    // Use a clean local scope to avoid polluting global namespace
+    // We import, then check if it's there.
+    for (int i=0; modules[i]; i++) {
+        // We try to import within a function/local scope if possible, but PyRun_SimpleString runs in __main__
+        // A better way is to plain import and letting it fail usually prints to stderr which we capture.
+        // To avoid pollution we can just 'del module' afterwards or wrap in a try block.
+        // wrapping in try/except block that prints to stderr on failure
+        QString code = QString("try:\n"
+                               "    import %1\n"
+                               "except ImportError as e:\n"
+                               "    print(f'Dependency Check Failed: {e}')\n"
+                               "    exit(1)\n").arg(modules[i]);
+        
+        // PyRun_SimpleString returns 0 on success, -1 on failure (if exit(1) is called it might kill the app? No, exit() in python raises SystemExit)
+        // Actually exit(1) in embedded python might terminate the process if not handled?
+        // Let's NOT use exit(). Let's set a variable.
+        
+        code = QString("try:\n"
+                       "    import %1\n"
+                       "except ImportError as e:\n"
+                       "    print(f'Dependency Check Failed: {e}')\n"
+                       "    raise e\n").arg(modules[i]);
+
+        if (PyRun_SimpleString(code.toStdString().c_str()) != 0) {
+            QString msg = QString("Failed to import module: %1").arg(modules[i]);
+            debugLog(msg.toStdString().c_str());
+            if (!missing.isEmpty()) missing += ", ";
+            missing += modules[i];
+            success = false;
+        }
+    }
+
+    if (!success) {
+        QString errorMsg = QObject::tr("GoldenCheetah Python support is enabled, but the following required packages could not be imported:\n\n%1\n\n"
+                                       "Please check the log for details.").arg(missing);
+        
+        // We should warn the user.
+        // But we are in the constructor, potentially on the main thread? Yes.
+        QMessageBox::warning(0, QObject::tr("Python Dependencies Missing"), errorMsg);
+        
+        // Should we fail loading? 
+        // loaded = false; // Maybe? But core python works.
+        // User asked to "instantly know". The popup does that.
+    } else {
+        printd("All dependencies imported successfully.\n");
+    }
+
+    return success;
 }
 
 // run on called thread

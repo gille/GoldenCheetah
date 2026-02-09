@@ -66,33 +66,30 @@ ln -s Versions/Current/Resources Resources
 ln -s Versions/Current/Python Python
 popd > /dev/null
 
-# Locate actual site-packages
-# setup-python installs site-packages inside the framework structure usually.
-# We verify this.
-SITE_PACKAGES_SRC=$(python3 -c "import site; print(site.getsitepackages()[0])")
-echo "Site Packages Source: $SITE_PACKAGES_SRC"
+# Locate actual site-packages -- NO LONGER NEEDED (we install fresh)
+# But we need verify pip is present
+PYTHON_BIN="GoldenCheetah.app/Contents/Frameworks/Python.framework/Versions/Current/bin/python3"
+
+echo "Installing requirements into bundle..."
+if [ -f "$PYTHON_BIN" ]; then
+    install_name_tool -add_rpath "@executable_path/../.." "$PYTHON_BIN" || true
+    
+    echo "Running pip install using bundled python: $PYTHON_BIN"
+    "$PYTHON_BIN" -m pip install --upgrade pip
+    "$PYTHON_BIN" -m pip install --break-system-packages --only-binary :all: -r ../src/Python/requirements.txt
+else
+    echo "ERROR: Bundled python binary not found at $PYTHON_BIN"
+    exit 1
+fi
+
+SITE_PACKAGES_SRC=$( "$PYTHON_BIN" -c "import numpy; import os; print(os.path.dirname(os.path.dirname(numpy.__file__)))" )
+echo "Verified Site Packages at: $SITE_PACKAGES_SRC"
 
 # Remove direct_url.json metadata which may contain absolute paths to the build machine
 # This prevents pip inspect from reporting build paths
 find "$SITE_PACKAGES_SRC" -name "direct_url.json" -delete
 
-# In setup-python, this should already be inside the framework we copied.
-# But if we are in a venv (as per install.sh), we might need to copy from venv?
-# install.sh created 'gc_venv'.
-# If we are using venv, the deps are there.
-# GHA workflow doesn't activate venv automatically in 'run' steps unless specified.
-# The user's GHA `install.sh` creates a venv but `before_build.sh` and `after_build.sh` might not use it?
-# Wait, `install.sh` did `python3 -m venv gc_venv`.
-# If subsequent steps don't activate it, they use system/setup-python directly.
-# `setup-python` puts pip packages in the hostedtoolcache user site or global site?
-# Usually global for that python install.
-# If `install.sh` used a venv, we MUST verify if `after_build.sh` is finding those packages.
-# Let's assume we want to pull from where dependencies were installed.
-# We will trust `rsync` of the framework if packages are there.
-# If `install.sh` installed to a VENV, filtering them into the bundle is harder.
-# I'll stick to the framework copy.
-
-# Fix pip binaries (AppVeyor logic)
+# Fix pip binaries
 echo "Fixing pip binaries to be relocatable..."
 PYTHON_BIN_DIR="GoldenCheetah.app/Contents/Frameworks/Python.framework/Versions/${PYTHON_FULL_VER}/bin"
 if [ -d "$PYTHON_BIN_DIR" ]; then
@@ -176,6 +173,41 @@ done
 echo "Bundling OpenSSL libraries..."
 OPENSSL_PREFIX=$(brew --prefix openssl@3)
 if [ -d "$OPENSSL_PREFIX" ]; then
+    echo "Found OpenSSL at $OPENSSL_PREFIX"
+    DEST_FRAMEWORKS="GoldenCheetah.app/Contents/Frameworks"
+    
+    # Copy libs
+    cp "$OPENSSL_PREFIX/lib/libssl.3.dylib" "$DEST_FRAMEWORKS/"
+    cp "$OPENSSL_PREFIX/lib/libcrypto.3.dylib" "$DEST_FRAMEWORKS/"
+    chmod +w "$DEST_FRAMEWORKS/libssl.3.dylib" "$DEST_FRAMEWORKS/libcrypto.3.dylib"
+    
+    # Fix IDs
+    install_name_tool -id "@loader_path/libssl.3.dylib" "$DEST_FRAMEWORKS/libssl.3.dylib"
+    install_name_tool -id "@loader_path/libcrypto.3.dylib" "$DEST_FRAMEWORKS/libcrypto.3.dylib"
+    install_name_tool -change "$OPENSSL_PREFIX/lib/libcrypto.3.dylib" "@loader_path/libcrypto.3.dylib" "$DEST_FRAMEWORKS/libssl.3.dylib"
+    
+    # Fix Python extensions (_ssl, _hashlib)
+    DYNLOAD_DIR="GoldenCheetah.app/Contents/Frameworks/Python.framework/Versions/${PYTHON_FULL_VER}/lib/python${PYTHON_FULL_VER}/lib-dynload"
+    if [ -d "$DYNLOAD_DIR" ]; then
+        for EXT in _ssl _hashlib; do
+            EXT_FILE=$(find "$DYNLOAD_DIR" -name "${EXT}.*.so" | head -n 1)
+            if [ -n "$EXT_FILE" ]; then
+                echo "Patching $EXT_FILE"
+                # Update linkage to find libssl/libcrypto relative to _ssl.so
+                # Path is @loader_path/../../../../../../libssl.3.dylib
+                install_name_tool -change "$OPENSSL_PREFIX/lib/libssl.3.dylib" "@loader_path/../../../../../../libssl.3.dylib" "$EXT_FILE"
+                install_name_tool -change "$OPENSSL_PREFIX/lib/libcrypto.3.dylib" "@loader_path/../../../../../../libcrypto.3.dylib" "$EXT_FILE"
+            fi
+        done
+    fi
+else
+    echo "WARNING: OpenSSL prefix not found!"
+fi
+
+# Copied from AppVeyor: Bundling OpenSSL
+echo "Bundling OpenSSL libraries..."
+OPENSSL_PREFIX=$(brew --prefix openssl@3)
+if [ -d "$OPENSSL_PREFIX" ]; then
     DEST_FRAMEWORKS="GoldenCheetah.app/Contents/Frameworks"
     cp "$OPENSSL_PREFIX/lib/libssl.3.dylib" "$DEST_FRAMEWORKS/"
     cp "$OPENSSL_PREFIX/lib/libcrypto.3.dylib" "$DEST_FRAMEWORKS/"
@@ -232,8 +264,9 @@ fix_binary_id() {
     # Ensure writable
     chmod +w "$BINARY"
 
-    # Check if ID is a system path
-    if [[ "$BINARY_ID" == *"/opt/homebrew"* ]] || [[ "$BINARY_ID" == *"/usr/local"* ]] || [[ "$BINARY_ID" == *"/Users"* ]]; then
+    # Check if ID is a system path (excluding /System/Library and /usr/lib which are OS libs)
+    # We want to catch Homebrew, /usr/local, User paths, AND /Library/Frameworks (std python install)
+    if [[ "$BINARY_ID" == *"/opt/homebrew"* ]] || [[ "$BINARY_ID" == *"/usr/local"* ]] || [[ "$BINARY_ID" == *"/Users"* ]] || [[ "$BINARY_ID" == *"/Library/Frameworks"* ]]; then
         local NEW_ID=""
         if [[ "$BINARY" == *".framework"* ]]; then
             # Extract framework relative path: .../Foo.framework/Versions/A/Foo -> Foo.framework/Versions/A/Foo
@@ -257,7 +290,7 @@ fix_binary_deps() {
     local BINARY="$1"
     
     # Check deps
-    otool -L "$BINARY" | grep -E "(/usr/local/|/opt/homebrew/|/Users/)" | awk '{print $1}' | while read LEAK_PATH; do
+    otool -L "$BINARY" | grep -E "(/usr/local/|/opt/homebrew/|/Users/|/Library/Frameworks/)" | grep -v "/System/" | awk '{print $1}' | while read LEAK_PATH; do
         local DEST_REL=""
         if [[ "$LEAK_PATH" == *".framework"* ]]; then
              local REL_PATH=$(echo "$LEAK_PATH" | sed -E 's/.*\/([^\/]+\.framework.*)/\1/')
@@ -321,7 +354,7 @@ fi
 echo "Scanning entire bundle for other leaks..."
 set +v
 # Use user's improved find command
-find GoldenCheetah.app/Contents/Frameworks \( -name "*.dylib" -o -name "*.so" -o -perm +111 \) -type f | sort -u | while read BINARY; do
+find GoldenCheetah.app/Contents/MacOS GoldenCheetah.app/Contents/Frameworks \( -name "GoldenCheetah" -o -name "*.dylib" -o -name "*.so" -o -perm +111 \) -type f | sort -u | while read BINARY; do
     if file "$BINARY" | grep -q "Mach-O"; then
         fix_binary_id "$BINARY"
         fix_binary_deps "$BINARY"
@@ -329,7 +362,6 @@ find GoldenCheetah.app/Contents/Frameworks \( -name "*.dylib" -o -name "*.so" -o
 done
 set -v
 
-# Signing
 echo "Resigning..."
 codesign --force --sign - "GoldenCheetah.app/Contents/Frameworks/Python.framework/Versions/${PYTHON_FULL_VER}/Python"
 codesign --force --sign - "GoldenCheetah.app/Contents/Frameworks/Python.framework/Versions/${PYTHON_FULL_VER}/bin/python${PYTHON_FULL_VER}"
@@ -346,13 +378,11 @@ if [ -d "$PYTHON_APP" ]; then
     codesign --force --preserve-metadata=identifier,entitlements --sign - "$PYTHON_APP"
 fi
 
-# Sign the Python framework itself
 echo "Signing Python.framework..."
 codesign --force --sign - "GoldenCheetah.app/Contents/Frameworks/Python.framework"
 
 codesign --force --deep --sign - GoldenCheetah.app
 
-# Create DMG
 echo "Creating DMG..."
 hdiutil create -volname GoldenCheetah -srcfolder GoldenCheetah.app -ov -format UDZO GoldenCheetah.dmg
 mv GoldenCheetah.dmg ../GoldenCheetah_v3.8_x64.dmg

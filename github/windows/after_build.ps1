@@ -38,6 +38,33 @@ if (Test-Path "$vcpkgRoot\installed\x64-windows\bin\libssl-3-x64.dll") {
 # Copy Python
 Copy-Item -Path "C:\Python" -Destination "." -Recurse -Force
 
+# OpenSSL License - Strict Check
+$openSSLLicenseFound = $false
+$possibleLicensePaths = @(
+    "$vcpkgRoot\installed\x64-windows\share\openssl\copyright",
+    "$vcpkgRoot\installed\x64-windows\share\openssl\LICENSE",
+    "C:\OpenSSL-Win64\license.txt",
+    "C:\OpenSSL-Win64\LICENSE.txt"
+)
+
+foreach ($path in $possibleLicensePaths) {
+    if (Test-Path $path) {
+        Write-Host "Found OpenSSL license at: $path"
+        Copy-Item $path "OpenSSL License.txt"
+        $openSSLLicenseFound = $true
+        break
+    }
+}
+
+if (-not $openSSLLicenseFound) {
+    Write-Error "FATAL: OpenSSL License file not found! It is legally required to bundle the license."
+    Write-Host "Checked paths:"
+    foreach ($path in $possibleLicensePaths) {
+        Write-Host " - $path"
+    }
+    exit 1
+}
+
 # GSL DLLs
 if (Test-Path "$vcpkgRoot\installed\x64-windows\bin\gsl.dll") {
     Copy-Item "$vcpkgRoot\installed\x64-windows\bin\gsl*.dll" .

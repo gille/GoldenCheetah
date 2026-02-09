@@ -76,6 +76,9 @@ class PythonEmbed {
     static bool pythonInstalled(QString &pybin, QString &pypath, QString PYTHONHOME=QString(""));
     QString pybin, pypath;
 
+    // verify core dependencies are importable
+    bool checkDependencies();
+
     // scripts can set a result value
     double result;
 

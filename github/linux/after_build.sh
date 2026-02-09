@@ -16,11 +16,45 @@ gh_download() {
         exit 1
     fi
     
-    # Rename if output name is different (gh downloads with original name)
     if [ "$pattern" != "$output" ]; then
         mv "$pattern" "$output"
     fi
 }
+
+# Helper variables
+# We use the PYTHON_VERSION from environment (e.g. 3.11) OR default
+if [ -z "$PYTHON_VERSION" ]; then
+    PYTHON_VERSION="3.11"
+fi
+PYTHON_APPIMAGE_VERSION="3.11.14"
+
+### This script should be run from GoldenCheetah src directory
+cd src
+if [ ! -x ./GoldenCheetah ]; then
+    echo "Build GoldenCheetah and execute from distribution src"
+    exit 1
+fi
+
+### Create AppDir
+mkdir -p appdir
+
+# Executable
+cp GoldenCheetah appdir
+
+# Desktop file
+cat >appdir/GoldenCheetah.desktop <<EOF
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=GoldenCheetah
+Comment=Cycling Power Analysis Software.
+Exec=GoldenCheetah
+Icon=gc
+Categories=Science;Sports;
+EOF
+
+# Icon
+cp Resources/images/gc.png appdir/
 
 ### Download linuxdeployqt
 gh_download "probonopd/linuxdeployqt" "continuous" "linuxdeployqt-continuous-x86_64.AppImage" "linuxdeployqt-continuous-x86_64.AppImage"

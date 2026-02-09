@@ -19,7 +19,7 @@ FOUND_LEAKS=0
 while read FILE; do
     if file "$FILE" | grep -q "Mach-O"; then
         # Check dependencies
-        LEAKS=$(otool -L "$FILE" | grep -E "\t(/usr/local/|/opt/homebrew/|/Users/)")
+        LEAKS=$(otool -L "$FILE" | grep -E "(/usr/local/|/opt/homebrew/|/Users/|/Library/Frameworks/)" | grep -v "/System/")
         
         if [ -n "$LEAKS" ]; then
             echo "---------------------------------------------------"

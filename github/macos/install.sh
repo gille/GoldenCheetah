@@ -65,14 +65,23 @@ brew_install libtool
 # Ensure brew tools are in PATH
 # Sometimes brew installs keg-only or the path isn't refreshed
 BREW_PREFIX=$(brew --prefix)
-export PATH="$BREW_PREFIX/opt/bison/bin:$BREW_PREFIX/opt/automake/bin:$BREW_PREFIX/opt/autoconf/bin:$BREW_PREFIX/opt/libtool/bin:$BREW_PREFIX/bin:$PATH"
+export PATH="$BREW_PREFIX/opt/bison/bin:$BREW_PREFIX/opt/automake/bin:$BREW_PREFIX/opt/autoconf/bin:$BREW_PREFIX/opt/libtool/bin:$PATH"
 
 # R Framework
 # Installing R from CRAN pkg as in AppVeyor
 # R Framework
 # Installing R from CRAN pkg as in AppVeyor
-download_file "https://cran.r-project.org/bin/macosx/base/R-4.1.1.pkg" "R-4.1.1.pkg" ""
-sudo installer -pkg R-4.1.1.pkg -target /
+# Detect architecture for correct R package
+ARCH=$(uname -m)
+if [ "$ARCH" == "arm64" ]; then
+    echo "Detected ARM64. Downloading R for Apple Silicon..."
+    download_file "https://cran.r-project.org/bin/macosx/big-sur-arm64/base/R-4.1.1-arm64.pkg" "R-4.1.1-arm64.pkg" ""
+    sudo installer -pkg R-4.1.1-arm64.pkg -target /
+else
+    echo "Detected x86_64. Downloading R for Intel..."
+    download_file "https://cran.r-project.org/bin/macosx/base/R-4.1.1.pkg" "R-4.1.1.pkg" ""
+    sudo installer -pkg R-4.1.1.pkg -target /
+fi
 
 # STMIO
 if [ ! -d "srmio" ]; then
@@ -106,9 +115,3 @@ fi
 sudo mkdir -p /usr/local/lib
 sudo cp D2XX/libftd2xx.1.4.24.dylib /usr/local/lib/
 sudo ln -sf /usr/local/lib/libftd2xx.1.4.24.dylib /usr/local/lib/libftd2xx.dylib
-
-# Python dependencies
-# GitHub Actions setup-python installs python.
-# We just need to install requirements.
-# python3 -m pip install --break-system-packages --upgrade pip
-python3 -m pip install --break-system-packages --only-binary :all: -r src/Python/requirements.txt
