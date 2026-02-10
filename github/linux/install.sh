@@ -41,7 +41,7 @@ if [ ! -d "D2XX" ] || [ -z "$(ls -A D2XX)" ]; then
     mkdir -p D2XX
     D2XX_URL="https://ftdichip.com/wp-content/uploads/2022/07/libftd2xx-x86_64-1.4.27.tgz"
     D2XX_FILE="libftd2xx-x86_64-1.4.27.tgz"
-    
+
     # Retry loop
     for i in {1..5}; do
         echo "Attempt $i: Downloading D2XX..."
@@ -49,7 +49,7 @@ if [ ! -d "D2XX" ] || [ -z "$(ls -A D2XX)" ]; then
             echo "Download and validation successful."
             break
         fi
-        
+
         echo "Download or validation failed. Retrying in 5s..."
         rm -f "$D2XX_FILE"
         sleep 5

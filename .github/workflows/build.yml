@@ -13,6 +13,7 @@ concurrency:
 
 env:
   PYTHON_VERSION: "3.11"
+  MACOSX_DEPLOYMENT_TARGET: "12.0"
 
   # Secrets
   GC_GOOGLE_CALENDAR_CLIENT_SECRET: ${{ secrets.GC_GOOGLE_CALENDAR_CLIENT_SECRET || '\\\"development_key\\\"' }}
@@ -72,6 +73,13 @@ jobs:
               qt_arch: clang_64,
               shell: "bash"
             }
+          - {
+              name: "macOS Universal",
+              os: macos-14,
+              qt_version: "6.5.3",
+              qt_arch: clang_64,
+              shell: "bash"
+            }
 
     steps:
       - uses: actions/checkout@v4
@@ -91,6 +99,57 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      # Caching - Windows Dependencies
+      - name: Cache Windows Libs
+        if: runner.os == 'Windows'
+        uses: actions/cache@v3
+        with:
+          path: |
+            C:\libs
+            C:\jom
+            C:\R
+            C:\Python
+          key: ${{ runner.os }}-libs-${{ hashFiles('github/windows/install.ps1') }}
+          restore-keys: |
+            ${{ runner.os }}-libs-
+
+      # Caching - macOS Dependencies
+      - name: Cache macOS Libs
+        if: runner.os == 'macOS'
+        uses: actions/cache@v3
+        with:
+          path: |
+            d2xx
+            srmio
+          key: ${{ runner.os }}-libs-${{ hashFiles('github/macos/install.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-libs-
+
+      # Caching - CCache for Linux/macOS
+      - name: Setup CCache
+        if: runner.os != 'Windows'
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ runner.os }}-${{ matrix.config.qt_version }}
+
+      # Caching - MacPorts (Universal Build)
+      - name: Cache MacPorts
+        if: matrix.config.name == 'macOS Universal'
+        uses: actions/cache@v3
+        with:
+          path: /opt/local
+          key: ${{ runner.os }}-macports-${{ hashFiles('github/macos/install_macports.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-macports-
+
+      - name: Fix MacPorts Permissions
+        if: matrix.config.name == 'macOS Universal'
+        run: |
+          if [ -d "/opt/local" ]; then
+            echo "Fixing MacPorts permissions..."
+            sudo chown -R root:admin /opt/local
+          fi
+
       - name: Install Dependencies (Windows)
         if: runner.os == 'Windows'
         run: github/windows/install.ps1
@@ -99,9 +158,13 @@ jobs:
         if: runner.os == 'Linux'
         run: bash github/linux/install.sh
 
-      - name: Install Dependencies (macOS)
-        if: runner.os == 'macOS'
+      - name: Install Dependencies (macOS Homebrew)
+        if: runner.os == 'macOS' && matrix.config.name != 'macOS Universal'
         run: bash github/macos/install.sh
+
+      - name: Install Dependencies (macOS MacPorts)
+        if: matrix.config.name == 'macOS Universal'
+        run: bash github/macos/install_macports.sh
 
       - name: Setup MSVC (Windows)
         if: runner.os == 'Windows'
@@ -115,28 +178,42 @@ jobs:
         if: runner.os == 'Linux'
         run: bash github/linux/before_build.sh
 
-      - name: Configure (macOS)
-        if: runner.os == 'macOS'
+      - name: Configure (macOS Homebrew)
+        if: runner.os == 'macOS' && matrix.config.name != 'macOS Universal'
         run: bash github/macos/before_build.sh
+
+      - name: Configure (macOS MacPorts)
+        if: matrix.config.name == 'macOS Universal'
+        run: bash github/macos/before_build_macports.sh
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
         run: |
           qmake build.pro -r -spec win32-msvc
-          # Windows can't build QWT in parallel.
-          jom -j1 sub-qwt
+          # Windows might fail QWT in parallel due to races.
+          # Try parallel first (-j -k), fallback to single thread (-j1) if it fails.
+          jom -k sub-qwt || jom -j1 sub-qwt
           # Build main source jom autodetects number of cores.
           jom sub-src
+
+      - name: Prepend CCache to PATH (Unix)
+        if: runner.os != 'Windows'
+        run: echo "/usr/lib/ccache:/usr/local/opt/ccache/libexec" >> $GITHUB_PATH
 
       - name: Build (Unix)
         if: runner.os != 'Windows'
         run: |
-          qmake build.pro -r
+          # Ensure QMake uses ccache
+          qmake build.pro -r "QMAKE_CXX=ccache g++" "QMAKE_CC=ccache gcc"
+          
           if [ "$(uname)" == "Darwin" ]; then
-            CORES=$(sysctl -n hw.ncpu)
+             # On macOS, ccache wraps clang usually
+             qmake build.pro -r "QMAKE_CXX=ccache clang++" "QMAKE_CC=ccache clang"
+             CORES=$(sysctl -n hw.ncpu)
           else
-            CORES=$(nproc)
+             CORES=$(nproc)
           fi
+          
           echo "Building with $CORES cores"
           make -j$CORES sub-qwt
           make -j$CORES sub-src
@@ -151,11 +228,16 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bash github/linux/after_build.sh
 
-      - name: Package (macOS)
-        if: runner.os == 'macOS'
+      - name: Package (macOS Homebrew)
+        if: runner.os == 'macOS' && matrix.config.name != 'macOS Universal'
         run: bash github/macos/after_build.sh
 
+      - name: Package (macOS MacPorts)
+        if: matrix.config.name == 'macOS Universal'
+        run: bash github/macos/after_build_macports.sh
+
       - name: Upload Artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: GoldenCheetah-${{ matrix.config.name }}

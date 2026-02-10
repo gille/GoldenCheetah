@@ -48,7 +48,7 @@ sed -i "" "s|#\(ICAL_LIBS    =.*\)|\1 -L${ICAL_PATH}/lib -lical|" src/gcconfig.p
 LIBUSB_PATH="$BREW_PREFIX/opt/libusb"
 sed -i "" "s|#\(LIBUSB_INSTALL =\).*|\1 ${LIBUSB_PATH}|" src/gcconfig.pri
 sed -i "" "s|#\(LIBUSB_LIBS    =.*\)|\1 -L${LIBUSB_PATH}/lib -lusb-1.0|" src/gcconfig.pri
-sed -i "" "s|#\(LIBUSB_USE_V_1 = true.*\)|\1|" src/gcconfig.pri
+# LIBUSB_USE_V_1 handled by common
 
 # SAMPLERATE
 SAMPLERATE_PATH="$BREW_PREFIX/opt/libsamplerate"
@@ -60,25 +60,10 @@ sed -i "" "s|#\(LMFIT_INSTALL =\).*|\1 /usr/local|" src/gcconfig.pri
 
 sed -i "" "s|#\(DEFINES += GC_HAVE_LION*\)|\1|" src/gcconfig.pri
 
-# HTTP Server
-sed -i "" "s|#\(HTPATH = ../httpserver.*\)|\1 |" src/gcconfig.pri
-
-# Robot
-sed -i "" "s|#\(DEFINES += GC_WANT_ROBOT.*\)|\1 |" src/gcconfig.pri
-
-# Qt6 VIDEO
-sed -i "" "s|\(DEFINES += GC_VIDEO_NONE.*\)|#\1 |" src/gcconfig.pri
-sed -i "" "s|#\(DEFINES += GC_VIDEO_QT6.*\)|\1 |" src/gcconfig.pri
-
-# Enable R embedding
-sed -i "" "s|#\(DEFINES += GC_WANT_R.*\)|\1 |" src/gcconfig.pri
-
 # Python (avoiding collision between GC Context.h and Python context.h)
 sed -i "" "s|#\(DEFINES += GC_WANT_PYTHON\)\.*|\1 |" src/gcconfig.pri
 
-# TrainerDay Query API
-echo "DEFINES += GC_WANT_TRAINERDAY_API" >> src/gcconfig.pri
-echo "DEFINES += GC_TRAINERDAY_API_PAGESIZE=25" >> src/gcconfig.pri
+# TrainerDay Query API already added by common config
 
 # macOS version config
 # Removing old architectire flags to allow native build on ARM
@@ -86,34 +71,13 @@ echo "DEFINES += GC_TRAINERDAY_API_PAGESIZE=25" >> src/gcconfig.pri
 # echo "QMAKE_CFLAGS_RELEASE += -mmacosx-version-min=10.7 -arch x86_64" >> src/gcconfig.pri
 echo "QMAKE_MACOSX_DEPLOYMENT_TARGET = 11.0" >> src/gcconfig.pri
 
-cat src/gcconfig.pri
+# Common Config (App Name, Release, Defines, Secrets)
+source $(dirname "$0")/before_build_common.sh
+add_common_config src/gcconfig.pri
+echo "CONFIG += static" >> src/gcconfig.pri
 
-# Patch Secrets.h with environment variables
-# Note: In GHA, we use environment variables mapped from secrets.
-# We will use a small inline python script or sed to replace placeholders.
-# The AppVeyor script used PowerShell for this. We can use sed.
-
-sed -i "" "s|__GC_GOOGLE_CALENDAR_CLIENT_SECRET__|${GC_GOOGLE_CALENDAR_CLIENT_SECRET}|" src/Core/Secrets.h
-sed -i "" "s|__GC_GOOGLE_DRIVE_CLIENT_ID__|${GC_GOOGLE_DRIVE_CLIENT_ID}|" src/Core/Secrets.h
-sed -i "" "s|__GC_GOOGLE_DRIVE_CLIENT_SECRET__|${GC_GOOGLE_DRIVE_CLIENT_SECRET}|" src/Core/Secrets.h
-sed -i "" "s|__GC_GOOGLE_DRIVE_API_KEY__|${GC_GOOGLE_DRIVE_API_KEY}|" src/Core/Secrets.h
-sed -i "" "s|OPENDATA_DISABLE|OPENDATA_ENABLE|" src/Core/Secrets.h
-sed -i "" "s|__GC_CLOUD_OPENDATA_SECRET__|${GC_CLOUD_OPENDATA_SECRET}|" src/Core/Secrets.h
-sed -i "" "s|__GC_WITHINGS_CONSUMER_SECRET__|${GC_WITHINGS_CONSUMER_SECRET}|" src/Core/Secrets.h
-sed -i "" "s|__GC_NOKIA_CLIENT_SECRET__|${GC_NOKIA_CLIENT_SECRET}|" src/Core/Secrets.h
-sed -i "" "s|__GC_DROPBOX_CLIENT_SECRET__|${GC_DROPBOX_CLIENT_SECRET}|" src/Core/Secrets.h
-sed -i "" "s|__GC_STRAVA_CLIENT_SECRET__|${GC_STRAVA_CLIENT_SECRET}|" src/Core/Secrets.h
-sed -i "" "s|__GC_CYCLINGANALYTICS_CLIENT_SECRET__|${GC_CYCLINGANALYTICS_CLIENT_SECRET}|" src/Core/Secrets.h
-sed -i "" "s|__GC_CLOUD_DB_BASIC_AUTH__|${GC_CLOUD_DB_BASIC_AUTH}|" src/Core/Secrets.h
-sed -i "" "s|__GC_CLOUD_DB_APP_NAME__|${GC_CLOUD_DB_APP_NAME}|" src/Core/Secrets.h
-sed -i "" "s|__GC_POLARFLOW_CLIENT_SECRET__|${GC_POLARFLOW_CLIENT_SECRET}|" src/Core/Secrets.h
-sed -i "" "s|__GC_SPORTTRACKS_CLIENT_SECRET__|${GC_SPORTTRACKS_CLIENT_SECRET}|" src/Core/Secrets.h
-sed -i "" "s|__GC_RWGPS_API_KEY__|${GC_RWGPS_API_KEY}|" src/Core/Secrets.h
-sed -i "" "s|__GC_NOLIO_CLIENT_ID__|${GC_NOLIO_CLIENT_ID}|" src/Core/Secrets.h
-sed -i "" "s|__GC_NOLIO_SECRET__|${GC_NOLIO_SECRET}|" src/Core/Secrets.h
-sed -i "" "s|__GC_XERT_CLIENT_SECRET__|${GC_XERT_CLIENT_SECRET}|" src/Core/Secrets.h
-sed -i "" "s|__GC_AZUM_CLIENT_SECRET__|${GC_AZUM_CLIENT_SECRET}|" src/Core/Secrets.h
-sed -i "" "s|__GC_TRAINERDAY_API_KEY__|${GC_TRAINERDAY_API_KEY}|" src/Core/Secrets.h
+# Secret patching
+patch_secrets
 
 # Update translations
 lupdate src/src.pro

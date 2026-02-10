@@ -148,7 +148,13 @@ macx {
     SOURCES += Train/VideoWindow.cpp
 }
 
-
+# MacPorts / Universal Build Support
+macx {
+    contains(CONFIG, universal_archs) {
+        message("Building Universal Binary (x86_64 arm64)")
+        QMAKE_APPLE_DEVICE_ARCHS = x86_64 arm64
+    }
+}
 
 # X11
 if (defined(GC_WANT_X11)) {
@@ -248,9 +254,17 @@ contains(DEFINES, "GC_WANT_R") {
     INCLUDEPATH += ./R
 
     ## include headers and libraries for R
-    win32  { QMAKE_CXXFLAGS += -I$$R_HOME/include
-             DEFINES += Win32 }
-    else   { QMAKE_CXXFLAGS += $$system($$R_HOME/bin/R CMD config --cppflags) }
+    !isEmpty(RINCLUDES) {
+        QMAKE_CXXFLAGS += $$RINCLUDES
+    } else {
+        win32  { QMAKE_CXXFLAGS += -I$$R_HOME/include
+                 DEFINES += Win32 }
+        else   { QMAKE_CXXFLAGS += $$system($$R_HOME/bin/R CMD config --cppflags) }
+    }
+
+    !isEmpty(RLIBS) {
+        LIBS += $$RLIBS
+    }
 
     ## R has lots of compatibility headers for S and legacy R code we don't want
     DEFINES += STRICT_R_HEADERS

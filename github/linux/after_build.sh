@@ -7,15 +7,15 @@ gh_download() {
     local tag="$2"
     local pattern="$3"
     local output="$4"
-    
+
     echo "Downloading $pattern from $repo ($tag)..."
     gh release download "$tag" -D . -p "$pattern" --repo "$repo" --clobber
-    
+
     if [ ! -f "$pattern" ]; then
         echo "Failed to download $pattern"
         exit 1
     fi
-    
+
     if [ "$pattern" != "$output" ]; then
         mv "$pattern" "$output"
     fi

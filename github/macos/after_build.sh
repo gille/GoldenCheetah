@@ -73,9 +73,9 @@ PYTHON_BIN="GoldenCheetah.app/Contents/Frameworks/Python.framework/Versions/Curr
 echo "Installing requirements into bundle..."
 if [ -f "$PYTHON_BIN" ]; then
     install_name_tool -add_rpath "@executable_path/../.." "$PYTHON_BIN" || true
-    
+
     echo "Running pip install using bundled python: $PYTHON_BIN"
-    "$PYTHON_BIN" -m pip install --upgrade pip
+    #"$PYTHON_BIN" -m pip install --upgrade pip
     "$PYTHON_BIN" -m pip install --break-system-packages --only-binary :all: -r ../src/Python/requirements.txt
 else
     echo "ERROR: Bundled python binary not found at $PYTHON_BIN"
@@ -175,17 +175,17 @@ OPENSSL_PREFIX=$(brew --prefix openssl@3)
 if [ -d "$OPENSSL_PREFIX" ]; then
     echo "Found OpenSSL at $OPENSSL_PREFIX"
     DEST_FRAMEWORKS="GoldenCheetah.app/Contents/Frameworks"
-    
+
     # Copy libs
     cp "$OPENSSL_PREFIX/lib/libssl.3.dylib" "$DEST_FRAMEWORKS/"
     cp "$OPENSSL_PREFIX/lib/libcrypto.3.dylib" "$DEST_FRAMEWORKS/"
     chmod +w "$DEST_FRAMEWORKS/libssl.3.dylib" "$DEST_FRAMEWORKS/libcrypto.3.dylib"
-    
+
     # Fix IDs
     install_name_tool -id "@loader_path/libssl.3.dylib" "$DEST_FRAMEWORKS/libssl.3.dylib"
     install_name_tool -id "@loader_path/libcrypto.3.dylib" "$DEST_FRAMEWORKS/libcrypto.3.dylib"
     install_name_tool -change "$OPENSSL_PREFIX/lib/libcrypto.3.dylib" "@loader_path/libcrypto.3.dylib" "$DEST_FRAMEWORKS/libssl.3.dylib"
-    
+
     # Fix Python extensions (_ssl, _hashlib)
     DYNLOAD_DIR="GoldenCheetah.app/Contents/Frameworks/Python.framework/Versions/${PYTHON_FULL_VER}/lib/python${PYTHON_FULL_VER}/lib-dynload"
     if [ -d "$DYNLOAD_DIR" ]; then
@@ -212,11 +212,11 @@ if [ -d "$OPENSSL_PREFIX" ]; then
     cp "$OPENSSL_PREFIX/lib/libssl.3.dylib" "$DEST_FRAMEWORKS/"
     cp "$OPENSSL_PREFIX/lib/libcrypto.3.dylib" "$DEST_FRAMEWORKS/"
     chmod +w "$DEST_FRAMEWORKS/libssl.3.dylib" "$DEST_FRAMEWORKS/libcrypto.3.dylib"
-    
+
     install_name_tool -id "@loader_path/libssl.3.dylib" "$DEST_FRAMEWORKS/libssl.3.dylib"
     install_name_tool -id "@loader_path/libcrypto.3.dylib" "$DEST_FRAMEWORKS/libcrypto.3.dylib"
     install_name_tool -change "$OPENSSL_PREFIX/lib/libcrypto.3.dylib" "@loader_path/libcrypto.3.dylib" "$DEST_FRAMEWORKS/libssl.3.dylib"
-    
+
     # Fix Python extensions (_ssl, _hashlib)
     DYNLOAD_DIR="GoldenCheetah.app/Contents/Frameworks/Python.framework/Versions/${PYTHON_FULL_VER}/lib/python${PYTHON_FULL_VER}/lib-dynload"
     if [ -d "$DYNLOAD_DIR" ]; then
@@ -260,7 +260,7 @@ echo "Starting manual leak patching..."
 fix_binary_id() {
     local BINARY="$1"
     local BINARY_ID=$(otool -D "$BINARY" | grep -v ":" | head -n 1)
-    
+
     # Ensure writable
     chmod +w "$BINARY"
 
@@ -277,7 +277,7 @@ fix_binary_id() {
             local LIB_NAME=$(basename "$BINARY")
             NEW_ID="@rpath/$LIB_NAME"
         fi
-        
+
         echo "  Fixing ID for $BINARY"
         echo "    Old: $BINARY_ID"
         echo "    New: $NEW_ID"
@@ -288,7 +288,7 @@ fix_binary_id() {
 # Helper: Fix dependencies of a binary
 fix_binary_deps() {
     local BINARY="$1"
-    
+
     # Check deps
     otool -L "$BINARY" | grep -E "(/usr/local/|/opt/homebrew/|/Users/|/Library/Frameworks/)" | grep -v "/System/" | awk '{print $1}' | while read LEAK_PATH; do
         local DEST_REL=""
@@ -343,7 +343,7 @@ fi
 
 PYTHON_APP_BIN="GoldenCheetah.app/Contents/Frameworks/Python.framework/Versions/Current/Resources/Python.app/Contents/MacOS/Python"
 if [ -f "$PYTHON_APP_BIN" ]; then
-     # This one is usually @executable_path/../../../../.. away from Frameworks root? 
+     # This one is usually @executable_path/../../../../.. away from Frameworks root?
      # It's deep inside Resoures.
      # Let's give it a generous RPATH to Frameworks root.
      install_name_tool -add_rpath "@executable_path/../../../../../../.." "$PYTHON_APP_BIN" || true

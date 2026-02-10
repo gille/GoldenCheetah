@@ -42,12 +42,12 @@ download_file() {
         else
             echo "Download failed."
         fi
-        
+
         rm -f "$filename"
         echo "Waiting ${wait}s..."
         sleep $wait
     done
-    
+
     echo "Failed to download $filename"
     exit 1
 }
@@ -84,19 +84,33 @@ else
 fi
 
 # STMIO
-if [ ! -d "srmio" ]; then
-    git clone https://github.com/rclasen/srmio.git
-    cd srmio
-    sh genautomake.sh
-    ./configure --disable-shared --enable-static
-    make -j$(sysctl -n hw.ncpu) --silent
+# Check if installed to system path, not just if source dir exists
+if [ ! -f "/usr/local/include/srm.h" ]; then
+    echo "Installing SRMIO..."
+    if [ ! -d "srmio" ]; then
+        git clone https://github.com/rclasen/srmio.git
+        cd srmio
+        sh genautomake.sh
+        ./configure --disable-shared --enable-static
+        make -j$(sysctl -n hw.ncpu) --silent
+    else
+        echo "SRMIO source cached. Building/Installing..."
+        cd srmio
+        # Ensure it's built in case cache only has source
+        if [ ! -f "libsrmio.a" ] && [ ! -f "src/.libs/libsrmio.a" ]; then
+             if [ -f "genautomake.sh" ]; then sh genautomake.sh; fi
+             ./configure --disable-shared --enable-static
+             make -j$(sysctl -n hw.ncpu) --silent
+        fi
+    fi
     sudo make install
     cd ..
+else
+    echo "SRMIO already installed."
 fi
 
 # D2XX
 if [ ! -d "D2XX" ]; then
-    mkdir -p D2XX
     mkdir -p D2XX
     download_file "https://ftdichip.com/wp-content/uploads/2021/05/D2XX1.4.24.zip" "D2XX1.4.24.zip" "unzip -t D2XX1.4.24.zip >/dev/null"
     unzip -o D2XX1.4.24.zip
@@ -109,9 +123,10 @@ if [ ! -d "D2XX" ]; then
 fi
 
 # Install D2XX to system lib for linking
-# For ARM, this should go to /usr/local/lib or /opt/homebrew/lib?
-# Start with /usr/local/lib which is standard for user-installed libs even on ARM, 
-# although /opt/homebrew is for brew.
+# Always check and reinstall if missing from /usr/local/lib
 sudo mkdir -p /usr/local/lib
-sudo cp D2XX/libftd2xx.1.4.24.dylib /usr/local/lib/
-sudo ln -sf /usr/local/lib/libftd2xx.1.4.24.dylib /usr/local/lib/libftd2xx.dylib
+if [ ! -f "/usr/local/lib/libftd2xx.1.4.24.dylib" ]; then
+    echo "Installing D2XX to /usr/local/lib..."
+    sudo cp D2XX/libftd2xx.1.4.24.dylib /usr/local/lib/
+    sudo ln -sf /usr/local/lib/libftd2xx.1.4.24.dylib /usr/local/lib/libftd2xx.dylib
+fi
