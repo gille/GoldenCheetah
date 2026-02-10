@@ -219,25 +219,17 @@ void nostderr(QString file)
 int
 main(int argc, char *argv[])
 {
-    // TRACE LOGGING FOR CI
-    std::cout << "TRACE: Entering main()" << std::endl;
-    std::cerr << "TRACE: Entering main() [stderr]" << std::endl;
-
     int ret=2; // return code from qapplication, default to error
 
 #ifdef Q_OS_WIN
     // On Windows without console, we try to attach to the parent's console
     // and redirect stderr and stdout on success, to have a more Unix-like
     // behavior when launched from cmd or PowerShell.
- /*
     if (_fileno(stderr) == -2 && AttachConsole(ATTACH_PARENT_PROCESS )) {
         freopen("CONOUT$", "w", stderr);
         freopen("CONOUT$", "w", stdout);
     }
-*/
 #endif
-
-    std::cout << "TRACE: Processing args..." << std::endl;
 
     //
     // PROCESS COMMAND LINE SWITCHES
@@ -276,7 +268,6 @@ main(int argc, char *argv[])
         i++;
         // help, usage or version requested, basic information
         if (arg == "--help" || arg == "--usage" || arg == "--version") {
-            std::cout << "TRACE: Handling --version/help" << std::endl;
             help = true;
             fprintf(stderr, "GoldenCheetah %s (%d)\n", VERSION_STRING, VERSION_LATEST);
         }
@@ -313,14 +304,12 @@ main(int argc, char *argv[])
 
         // version requested, additional information
         } else if (arg == "--version") {
-            std::cout << "TRACE: Generating version HTML" << std::endl;
             QString html = GcCrashDialog::versionHTML();
             html.replace("</td><td>", ": "); // to maintain colums in one line
             QString text = QTextDocumentFragment::fromHtml(html).toPlainText();
             QByteArray ba = text.toLocal8Bit();
             const char *c_str = ba.data();
             fprintf(stderr, "\n%s\n\n", c_str);
-            std::cout << "TRACE: Version info printed" << std::endl;
         } else if (arg == "--server") {
 #ifdef GC_WANT_HTTP
             nogui = server = true;
@@ -369,12 +358,9 @@ main(int argc, char *argv[])
     }
     // help or version printed so just exit now
     if (help) {
-        std::cout << "TRACE: Exiting main() [help/version]" << std::endl;
         exit(0);
     }
     
-    std::cout << "TRACE: Initialising Objects..." << std::endl;
-
     //
     // INITIALISE ONE TIME OBJECTS
     //
@@ -402,13 +388,9 @@ main(int argc, char *argv[])
     // we don't want program aborts when maths routines don't know
     // what to do. We may add our own error handler later.
     gsl_set_error_handler_off();
-    
-    std::cout << "TRACE: Creating QApplication..." << std::endl;
 
     // create the application -- only ever ONE regardless of restarts
     application = new QApplication(argc, argv);
-    
-    std::cout << "TRACE: QApplication Created." << std::endl;
 
 #ifdef Q_OS_WIN
     if (application->style()->name() == "windows11") {
@@ -423,8 +405,6 @@ main(int argc, char *argv[])
     // read defaults
     initPowerProfile();
     
-    std::cout << "TRACE: PowerProfile initialized." << std::endl;
-
     // output colors as configured so we can cut and paste into Colors.cpp
     // uncomment when developers working on theme colors
     //GCColor::dumpColors();
@@ -467,8 +447,6 @@ main(int argc, char *argv[])
     appsettings->setValue(GC_FONT_DEFAULT_SIZE, font.pointSizeF());
     appsettings->setValue(GC_FONT_CHARTLABELS_SIZE, font.pointSizeF() * 0.8);
 
-    std::cout << "TRACE: Fonts configured." << std::endl;
-
     // what filestores are registered (whilst we refactor)
     //qDebug()<<"Cloud services registered:"<<CloudServiceFactory::instance().serviceNames();
 
@@ -476,34 +454,9 @@ main(int argc, char *argv[])
     // OPEN FIRST MAINWINDOW
     //
     do {
-
         // lets not restart endlessly
         restarting = false;
         
-        std::cout << "TRACE: Starting Main Loop..." << std::endl;
-
-        // we reload R if we are restarting to get that, but
-        // only if it failed
-#ifdef GC_WANT_R
-        // create the singleton in the main thread
-        // will be shared by all athletes and all charts (!!)
-        if (noR) {
-            rtool = NULL;
-        } else if (rtool == NULL && appsettings->value(NULL, GC_EMBED_R, true).toBool()) {
-            rtool = new RTool();
-            if (rtool->failed == true) rtool=NULL;
-        }
-#endif
-
-#ifdef GC_WANT_PYTHON
-        bool embed = appsettings->value(NULL, GC_EMBED_PYTHON, true).toBool();
-        if (embed && noPy == false && python == NULL) {
-            python = new PythonEmbed(); // initialise python in this thread ?
-            if (python->loaded == false) python=NULL;
-        }
-#endif
-        std::cout << "TRACE: R/Python initialized." << std::endl;
-
         //this is the path within the current directory where GC will look for
         //files to allow USB stick support
         QString localLibraryPath="Library/GoldenCheetah";
@@ -554,8 +507,6 @@ main(int argc, char *argv[])
             }
         }
         
-        std::cout << "TRACE: Library path resolved: " << home.canonicalPath().toStdString() << std::endl;
-
         // set global root directory
         gcroot = home.canonicalPath();
         appsettings->initializeQSettingsGlobal(gcroot);
@@ -567,6 +518,28 @@ main(int argc, char *argv[])
         qSetMessagePattern(debugFormat);
         QLoggingCategory::setFilterRules(debugRules.replace(";", "\n")); // accept ; as separator like QT_LOGGING_RULES
 
+#ifdef GC_WANT_R
+        // we reload R if we are restarting to get that, but
+        // only if it failed
+
+        // create the singleton in the main thread
+        // will be shared by all athletes and all charts (!!)
+        if (noR) {
+            rtool = NULL;
+        } else if (rtool == NULL && appsettings->value(NULL, GC_EMBED_R, true).toBool()) {
+            rtool = new RTool();
+            if (rtool->failed == true) rtool=NULL;
+        }
+#endif
+
+#ifdef GC_WANT_PYTHON
+        bool embed = appsettings->value(NULL, GC_EMBED_PYTHON, true).toBool();
+        if (embed && noPy == false && python == NULL) {
+            python = new PythonEmbed(); // initialise python in this thread ?
+            if (python->loaded == false) python=NULL;
+        }
+#endif
+
         // Language setting (default to system locale)
         QVariant lang = appsettings->value(NULL, GC_LANG, QLocale::system().name());
 
@@ -576,8 +549,6 @@ main(int argc, char *argv[])
             qDebug()<<"Failed to load Qt translator for "<<lang.toString();
         application->installTranslator(&qtTranslator);
         
-        std::cout << "TRACE: Translator loaded." << std::endl;
-
         // Load specific translation, try from GCROOT otherwise from binary
         QTranslator gcTranslator;
         QString translation_file = "/gc_" + lang.toString() + ".qm";
@@ -598,8 +569,6 @@ main(int argc, char *argv[])
         appsettings->migrateQSettingsSystem(); // colors must be setup before migration can take place, but reading has to be from the migrated ones
         GCColor::readConfig();
         
-        std::cout << "TRACE: Settings migrated." << std::endl;
-
         // Initialize metrics once the translator is installed
         RideMetricFactory::instance().initialize();
 
@@ -611,8 +580,6 @@ main(int argc, char *argv[])
 
         // initialise the trainDB
         trainDB = new TrainDB(home);
-        
-        std::cout << "TRACE: TrainDB initialized." << std::endl;
 
         // lets do what the command line says ...
         QVariant lastOpened;
@@ -777,8 +744,6 @@ main(int argc, char *argv[])
             }
         }
         
-        std::cout << "TRACE: Starting Event Loop..." << std::endl;
-
         ret=application->exec();
 
         // close trainDB
@@ -790,8 +755,6 @@ main(int argc, char *argv[])
     } while (restarting);
 
     delete application;
-    
-    std::cout << "TRACE: Exiting main() [Clean]" << std::endl;
 
     return ret;
 }

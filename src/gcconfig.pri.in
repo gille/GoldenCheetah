@@ -40,6 +40,9 @@
 # packages. There is an R script in the `util' directory that
 # can be run to install these packages; see it for more info.
 #DEFINES += GC_WANT_R
+# Optional R paths (needed by MacPorts)
+#RINCLUDES =
+#RLIBS =
 
 ###############################################################################
 # PYTHON CONFIGURATION

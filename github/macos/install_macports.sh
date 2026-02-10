@@ -35,30 +35,39 @@ echo "Selecting Python 3.11 as default..."
 # Set default versions (fail if not found)
 sudo port select --set python python311
 sudo port select --set python3 python311
-sudo port select --set pip pip311 || true
-sudo port select --set pip3 pip311 || true
+sudo port select --set pip pip311
+sudo port select --set pip3 pip311
+
+
+echo "Installing Build Tools (Native)..."
+# These do not need to be universal as they just run on the host
+sudo port install bison cmake pkgconfig automake autoconf libtool
 
 echo "Installing Dependencies (STRICTLY UNIVERSAL)..."
-# Install Dependencies
-# python311, py311-pip (already done), gsl, libical, libusb, libsamplerate
-# We add +universal to ALL dependencies we link against.
 
-sudo port install gsl +universal
-# R: Use manual merge of CRAN binaries to avoid gcc dependency
-# sudo port install R +universal -recommended  <-- Fails due to libgcc
+# Read requirements file
+REQUIREMENTS_FILE="$(dirname "$0")/macports_requirements.txt"
+if [ ! -f "$REQUIREMENTS_FILE" ]; then
+    echo "ERROR: Requirements file not found at $REQUIREMENTS_FILE"
+    exit 1
+fi
 
-# libical pulls in too many dependencies (glib, python, docbook, etc.)
-# We will build it manually below.
-sudo port install cmake +universal
-sudo port install libusb +universal
-sudo port install libsamplerate +universal
-sudo port install pkgconfig +universal
-sudo port install automake autoconf libtool +universal
+# Build installation command
+INSTALL_CMD="sudo port install"
+while read -r PORT; do
+    # Skip empty lines and comments
+    [[ -z "$PORT" || "$PORT" =~ ^# ]] && continue
+    INSTALL_CMD="$INSTALL_CMD $PORT +universal"
+done < "$REQUIREMENTS_FILE"
+
+echo "Running: $INSTALL_CMD"
+$INSTALL_CMD
 
 # --- LIBICAL (Manual Universal Build) ---
 # MacPorts libical pulls in glib/python3.14/docbook. We build manually to prune.
-if [ ! -d "libical" ]; then
+if [ ! -d "libical-install" ]; then
     echo "Downloading and building Libical (Universal, No-GObject)..."
+    rm -rf libical
     git clone --branch v3.0.18 --depth 1 https://github.com/libical/libical.git
     mkdir -p libical/build
     cd libical/build
@@ -78,11 +87,16 @@ if [ ! -d "libical" ]; then
     make -j$(sysctl -n hw.ncpu)
     make install
     cd ../..
+    # Cleanup source to save space/confusion
+    rm -rf libical
+else
+    echo "Using cached Libical."
 fi
 
 # --- SRMIO (Universal Build) ---
-if [ ! -d "srmio" ]; then
+if [ ! -d "srmio-install" ]; then
     echo "Downloading and building SRMIO (Universal)..."
+    rm -rf srmio
     git clone https://github.com/rclasen/srmio.git
     cd srmio
     # srmio uses autotools
@@ -104,6 +118,9 @@ if [ ! -d "srmio" ]; then
     make -j$(sysctl -n hw.ncpu)
     make install
     cd ..
+    rm -rf srmio
+else
+    echo "Using cached SRMIO."
 fi
 
 # --- D2XX ---

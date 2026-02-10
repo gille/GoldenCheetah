@@ -2,15 +2,19 @@
 
 # Common functions for macOS build configuration
 
+# Helper append function only for non-standard lines
+append_config() {
+    echo "$1" >> "$CONFIG_FILE"
+}
+# helper for sed in-place on macOS
+sed_i() {
+    sed -i '' "$@"
+}
+
 # Function to patch Secrets.h with environment variables
 patch_secrets() {
     local secrets_file="src/Core/Secrets.h"
     echo "Patching secrets in $secrets_file..."
-
-    # helper for sed in-place on macOS
-    sed_i() {
-        sed -i '' "$@"
-    }
 
     sed_i "s|__GC_GOOGLE_CALENDAR_CLIENT_SECRET__|$GC_GOOGLE_CALENDAR_CLIENT_SECRET|g" "$secrets_file"
     sed_i "s|__GC_GOOGLE_DRIVE_CLIENT_ID__|$GC_GOOGLE_DRIVE_CLIENT_ID|g" "$secrets_file"
@@ -42,11 +46,6 @@ add_common_config() {
 
     echo "Applying common config to $config_file..."
 
-    # helper for sed in-place on macOS
-    sed_i() {
-        sed -i '' "$@"
-    }
-
     # App Name
     sed_i "s|#APP_NAME =|APP_NAME = GoldenCheetah|" "$config_file"
 
@@ -77,4 +76,13 @@ add_common_config() {
     sed_i "s|#DEFINES += GC_WANT_TRAINERDAY_API|DEFINES += GC_WANT_TRAINERDAY_API|" "$config_file"
     # Note: there is no placeholder for pagesize? Checking pri.in... line 308
     sed_i "s|#DEFINES += GC_TRAINERDAY_API_PAGESIZE=25|DEFINES += GC_TRAINERDAY_API_PAGESIZE=25|" "$config_file"
+
+    # CloudDB (Common - Explicitly Active)
+    # Fix for Universal build missing this.
+    # We check if it's commented out and uncomment it, or append if missing/different format
+    sed_i "s|^#CloudDB =|CloudDB =|" "$config_file"
+    # Also handle the bare 'CloudDB = active' style if the comment is just #CloudDB
+    if grep -q "^#CloudDB" "$config_file"; then
+         sed_i "s|^#CloudDB|CloudDB = active|" "$config_file"
+    fi
 }

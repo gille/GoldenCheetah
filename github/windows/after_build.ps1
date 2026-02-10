@@ -131,18 +131,19 @@ Copy-Item "..\Resources\win32\GC3.8-Master-W64-QT6.nsi" .
 
 # Setup NSIS Path
 $env:PATH += ";C:\Program Files (x86)\NSIS"
-makensis GC3.8-Master-W64-QT6.nsi
+makensis /DGC_VERSION=$env:GC_VERSION GC3.8-Master-W64-QT6.nsi
 Write-Host "NSIS Build Completed Successfully."
 # Move to root for artifact upload
-Move-Item "GoldenCheetah_v3.8_64bit_Windows.exe" "..\..\GoldenCheetah_v3.8_x64.exe"
+# Move to root for artifact upload
+Move-Item "GoldenCheetah_v$($env:GC_VERSION)_64bit_Windows.exe" "..\..\GoldenCheetah_v$($env:GC_VERSION)_x64.exe"
 
 # Version check & Git info
 Set-Location "..\.."
-# ./GoldenCheetah_v3.8_x64.exe --version | Out-File "GCversionWindows.txt" -Encoding utf8
+# ./GoldenCheetah_v$($env:GC_VERSION)_x64.exe --version | Out-File "GCversionWindows.txt" -Encoding utf8
 Write-Host "Version Check Completed Successfully."
 git log -1 >> GCversionWindows.txt
 Write-Host "Git Log Completed Successfully."
-CertUtil -hashfile GoldenCheetah_v3.8_x64.exe sha256 | Select-Object -First 2 | Add-Content GCversionWindows.txt
+CertUtil -hashfile "GoldenCheetah_v$($env:GC_VERSION)_x64.exe" sha256 | Select-Object -First 2 | Add-Content GCversionWindows.txt
 Write-Host "CertUtil Completed Successfully."
 Get-Content GCversionWindows.txt
 Write-Host "Get-Content Completed Successfully."

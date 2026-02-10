@@ -17,6 +17,7 @@ echo "MACOSX_DEPLOYMENT_TARGET: $MACOSX_DEPLOYMENT_TARGET"
 # Configure gcconfig.pri
 CONFIG_FILE="src/gcconfig.pri"
 cp src/gcconfig.pri.in "$CONFIG_FILE"
+cp qwt/qwtconfig.pri.in qwt/qwtconfig.pri
 
 # Source common functions
 source $(dirname "$0")/before_build_common.sh
@@ -24,13 +25,16 @@ source $(dirname "$0")/before_build_common.sh
 # 1. Common Config (App Name, Release, Defines)
 add_common_config "$CONFIG_FILE"
 
-# Helper append function only for non-standard lines
-append_config() {
-    echo "$1" >> "$CONFIG_FILE"
-}
+# Use MacPorts bison (yacc)
+append_config "QMAKE_YACC = /opt/local/bin/bison"
+sed -i "" "s|#QMAKE_MOVE = cp|QMAKE_MOVE = cp|" src/gcconfig.pri
+append_config "LIBZ_LIBS = -lz"
 
 # MacPorts Specific: Universal Archs
 append_config "CONFIG += universal_archs"
+
+# Force QWT to build universally by injecting arch flags directly
+echo "QMAKE_APPLE_DEVICE_ARCHS = x86_64 arm64" >> qwt/qwtconfig.pri
 
 # 2. Paths
 # We use standard Qt from install-qt-action (which is universal dual-arch).
@@ -39,11 +43,6 @@ append_config "CONFIG += universal_archs"
 # add_config "QMAKE_LRELEASE = /opt/local/libexec/qt6/bin/lrelease"
 
 # 3. Dependencies from MacPorts
-
-# helper for sed in-place on macOS
-sed_i() {
-    sed -i '' "$@"
-}
 
 # GSL
 sed_i "s|#GSL_INCLUDES =.*|GSL_INCLUDES = /opt/local/include|" "$CONFIG_FILE"
@@ -84,7 +83,13 @@ sed_i "s|#PYTHONLIBS =|PYTHONLIBS = -L${PY_FRAMEWORK}/lib -lpython3.11|" "$CONFI
 R_FRAMEWORK="$(pwd)/R-Universal/R.framework"
 if [ -d "$R_FRAMEWORK" ]; then
     echo "Using Local R Universal Framework: $R_FRAMEWORK"
-    sed_i "s|#RINCLUDES =|RINCLUDES = -I${R_FRAMEWORK}/Headers|" "$CONFIG_FILE"
+    # Use Headers symlink if present, fall back to Resources/include
+    if [ -d "$R_FRAMEWORK/Headers" ] || [ -L "$R_FRAMEWORK/Headers" ]; then
+        R_HEADERS="$R_FRAMEWORK/Headers"
+    else
+        R_HEADERS="$R_FRAMEWORK/Resources/include"
+    fi
+    sed_i "s|#RINCLUDES =|RINCLUDES = -I${R_HEADERS}|" "$CONFIG_FILE"
     # For framework linking, we point to the parent directory
     # -F$(pwd)/R-Universal -framework R
     sed_i "s|#RLIBS =|RLIBS = -F$(dirname "$R_FRAMEWORK") -framework R|" "$CONFIG_FILE"

@@ -1,6 +1,9 @@
 #!/bin/bash
 set -ev
 
+# Version from CI, fallback for local runs
+: "${GC_VERSION:=3.8}"
+
 # Helper: gh release download wrapper
 gh_download() {
     local repo="$1"
@@ -122,4 +125,4 @@ if [ ! -f GoldenCheetah*.AppImage ]; then
 fi
 
 echo "Renaming AppImage file..."
-mv GoldenCheetah*.AppImage ../GoldenCheetah_v3.8_x64.AppImage
+mv GoldenCheetah*.AppImage "../GoldenCheetah_v${GC_VERSION}_x64.AppImage"

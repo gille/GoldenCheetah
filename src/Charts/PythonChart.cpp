@@ -266,18 +266,18 @@ PythonConsole::currentLine()
 
 void PythonConsole::mousePressEvent(QMouseEvent *e)
 {
-    Q_UNUSED(e)
+    QTextEdit::mousePressEvent(e);
     setFocus();
 }
 
 void PythonConsole::mouseDoubleClickEvent(QMouseEvent *e)
 {
-    Q_UNUSED(e)
+    QTextEdit::mouseDoubleClickEvent(e);
 }
 
 void PythonConsole::contextMenuEvent(QContextMenuEvent *e)
 {
-    Q_UNUSED(e)
+    QTextEdit::contextMenuEvent(e);
 }
 
 PythonChart::PythonChart(Context *context, bool ridesummary) : GcChartWindow(context), context(context), ridesummary(ridesummary)

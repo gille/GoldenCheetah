@@ -1,0 +1,6 @@
+python311
+py311-pip
+gsl
+libusb
+libsamplerate
+icu

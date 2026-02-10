@@ -1,6 +1,7 @@
 #!/bin/bash
 set -ev
 
+: "${GC_VERSION:=3.8}"
 : "${MACOSX_DEPLOYMENT_TARGET:=12.0}"
 : "${PYTHON_VERSION:=3.11}"
 
@@ -11,6 +12,7 @@ echo "Packaging MacPorts Universal Build..."
 
 # 0. Clean & Prepare
 cd src
+export PIP_BREAK_SYSTEM_PACKAGES=1
 mkdir -p GoldenCheetah.app/Contents/Frameworks
 
 # 1. Copy MacPorts Python Framework
@@ -22,102 +24,117 @@ echo "Copying Python Framework from $MACPORTS_PY_FW"
 rm -rf "$DEST_PY_FW"
 rsync -axL "$MACPORTS_PY_FW/" "$DEST_PY_FW/"
 
-# Fix Framework structure (rsync -L flattening)
-echo "Restoring standard Python Framework structure..."
-pushd GoldenCheetah.app/Contents/Frameworks/Python.framework > /dev/null
-rm -rf Headers Resources Python Versions/Current
-ln -s "Versions/${PYTHON_VERSION}" Versions/Current
-ln -s Versions/Current/Headers Headers
-ln -s Versions/Current/Resources Resources
-ln -s Versions/Current/Python Python
-popd > /dev/null
+# 1.5 Copy R Framework (Universal)
+R_FW_SRC="../R-Universal/R.framework"
+if [ -d "$R_FW_SRC" ]; then
+    echo "Copying R Framework from $R_FW_SRC"
+    DEST_R_FW="GoldenCheetah.app/Contents/Frameworks/R.framework"
+    rm -rf "$DEST_R_FW"
+    # Use -a to preserve symlinks (Versions/Current -> 4.x)
+    rsync -a "$R_FW_SRC/" "$DEST_R_FW/"
+    
+    # Clean up Headers to save space
+    rm -rf "$DEST_R_FW/Headers" "$DEST_R_FW/Versions/*/Headers" "$DEST_R_FW/Versions/*/Resources/doc"
 
-# 2. Install Python Requirements
-# With MacPorts, we installed numpy via port +universal.
-# We should install other requirements into the bundle using the BUNDLED interpreter or MacPorts pip?
-# If we assume we want strictly universal, we should rely on 'port' for as much as possible.
-# But for pure python packages, pip is fine.
-# Note: MacPorts python is NOT relocation friendly by default?
-# We need to make it relocatable.
+    # Optimization: Remove Tests and Help 
+    # (Help is large, but might be needed? We'll remove tests for sure)
+    rm -rf "$DEST_R_FW/Versions/*/Resources/tests"
+    rm -rf "$DEST_R_FW/Versions/*/Resources/library/*/tests"
+    # Optional: Remove help if size is critical (commented out for now until confirmed sage)
+    # rm -rf "$DEST_R_FW/Versions/*/Resources/library/*/help"
 
-PYTHON_BIN="GoldenCheetah.app/Contents/Frameworks/Python.framework/Versions/${PYTHON_VERSION}/bin/python${PYTHON_VERSION}"
+    # Fix Broken Symlinks (fontconfig often has symlinks to /opt/X11/...)
+    # This causes cp errors when moving the bundle.
+    find "$DEST_R_FW" -name "conf.d" -type d | while read CONFD; do
+        find "$CONFD" -type l ! -exec test -e {} \; -delete
+    done
 
-if [ -f "$PYTHON_BIN" ]; then
-    install_name_tool -add_rpath "@executable_path/../.." "$PYTHON_BIN" || true
+    # Fix Structure for Codesign
+    # Codesign requires frameworks to NOT have unsealed content in the root (only Versions + symlinks).
+    
+    # 1. Move Licenses to App Resources (Preserve Legal)
+    mkdir -p "GoldenCheetah.app/Contents/Resources/Licenses"
+    if [ -f "$DEST_R_FW/COPYING" ]; then
+        mv "$DEST_R_FW/COPYING" "GoldenCheetah.app/Contents/Resources/Licenses/R-COPYING"
+    fi
+    if [ -f "$DEST_R_FW/SVN-REVISION" ]; then
+        mv "$DEST_R_FW/SVN-REVISION" "GoldenCheetah.app/Contents/Resources/Licenses/R-SVN-REVISION"
+    fi
 
-    # We install requirements using the MacPorts python (system) targeting the bundle?
-    # Or just use the bundled one? Bundled one might have hardcoded paths to /opt/local.
-    # Let's use bundled one.
+    # 2. Remove loose files in root (COPYING, SVN-REVISION, etc.)
+    echo "Cleaning R.framework root structure..."
+    find "$DEST_R_FW" -maxdepth 1 -type f -delete
 
-    echo "Installing requirements into bundle..."
-    # We need to ensure we don't pick up /opt/local packages unless we copy them?
-    # Actually, we copied the WHOLE framework, including /opt/local/.../site-packages
-    # So 'numpy' should already be there!
-
-    # Let's install checking for missing ones from requirements.txt
-    "$PYTHON_BIN" -m pip install --upgrade pip
-    "$PYTHON_BIN" -m pip install --break-system-packages --ignore-installed --only-binary :all: -r ../src/Python/requirements.txt || true
-    # We allow failure above if packages (like numpy) are already provided by MacPorts and pip can't overwrite/compile universal easily.
+    # Ensure Symlinks are correct
+    # Some R installs put PrivateHeaders in root?
+    rm -rf "$DEST_R_FW/PrivateHeaders" "$DEST_R_FW/Libraries"
+    
+    # Re-create root symlinks if missing/broken
+    # (Checking if Versions/Current exists first)
+    if [ -d "$DEST_R_FW/Versions/Current" ]; then
+        rm -f "$DEST_R_FW/Resources" "$DEST_R_FW/Headers" "$DEST_R_FW/R"
+        ln -sf Versions/Current/Resources "$DEST_R_FW/Resources"
+        ln -sf Versions/Current/Headers "$DEST_R_FW/Headers"
+        ln -sf Versions/Current/R "$DEST_R_FW/R" # Binary link if exists? R framework binary usually named R
+        # Wait, R framework binary is usually "R" inside Versions/Current/R ? No, it's Versions/Current/R (binary) or Versions/Current/Resources/lib/libR.dylib?
+        # Standard Mac Framework: Binary "R" at top level of Version.
+        # Let's check if Versions/Current/R exists.
+    fi
 else
-    echo "ERROR: Bundled python binary not found."
-    exit 1
+    echo "WARNING: R Framework not found at $R_FW_SRC. R integration may fail."
 fi
 
+# Fix Framework structure (rsync -L flattening)
+# 2. Install Python Requirements & Fix Framework
+# Consolidated into shared script
+echo "Calling shared Python install script..."
+bash ../github/macos/install_python_deps.sh "GoldenCheetah.app" "${PYTHON_VERSION}" "../src/Python/requirements.txt"
+
 # 3. Qt Deployment
-# We need to verify if we are deploying a Universal App.
-# macdeployqt handles this IF Qt itself is compatible.
-macdeployqt GoldenCheetah.app -verbose=2 -executable=GoldenCheetah.app/Contents/MacOS/GoldenCheetah
+# Consolidated into shared script
+echo "Calling shared Qt packaging script..."
+bash ../github/macos/package_qt.sh "GoldenCheetah.app"
 
-# 4. Manual Fix-up (Universal & MacPorts Specifics)
-# MacPorts libs are in /opt/local/lib. They are universal.
-# macdeployqt might miss some or fail to patch them.
-# We need to scan and fix.
-
-fix_binary_id() {
-    local BINARY="$1"
-    local BINARY_ID=$(otool -D "$BINARY" | grep -v ":" | head -n 1)
-    # Check if ID is /opt/local
-    if [[ "$BINARY_ID" == *"/opt/local"* ]]; then
-        local LIB_NAME=$(basename "$BINARY")
-        local NEW_ID="@rpath/$LIB_NAME"
-        install_name_tool -id "$NEW_ID" "$BINARY"
+# 4.5 Copy D2XX (libftd2xx)
+# It is built/downloaded locally in ../D2XX
+D2XX_SRC="../D2XX/libftd2xx.1.4.24.dylib"
+if [ -f "$D2XX_SRC" ]; then
+    echo "Copying D2XX from $D2XX_SRC"
+    cp "$D2XX_SRC" "GoldenCheetah.app/Contents/Frameworks/libftd2xx.dylib"
+    chmod +w "GoldenCheetah.app/Contents/Frameworks/libftd2xx.dylib"
+    
+    # Fix ID
+    install_name_tool -id "@rpath/libftd2xx.dylib" "GoldenCheetah.app/Contents/Frameworks/libftd2xx.dylib"
+    
+    # Fix main binary linking
+    # The binary might link to "libftd2xx.dylib" (no path) or the full path depending on build
+    # We force it to @rpath
+    echo "Linking GoldenCheetah to @rpath/libftd2xx.dylib..."
+    if otool -L "GoldenCheetah.app/Contents/MacOS/GoldenCheetah" | grep -q "libftd2xx.dylib"; then
+        install_name_tool -change "libftd2xx.dylib" "@rpath/libftd2xx.dylib" "GoldenCheetah.app/Contents/MacOS/GoldenCheetah"
     fi
-}
-
-fix_binary_deps() {
-    local BINARY="$1"
-    otool -L "$BINARY" | grep "/opt/local" | awk '{print $1}' | while read LEAK_PATH; do
-        local LIB_NAME=$(basename "$LEAK_PATH")
-        local DEST_REL="@rpath/$LIB_NAME"
-
-        # Copy if missing
-        if [ ! -f "GoldenCheetah.app/Contents/Frameworks/$LIB_NAME" ]; then
-            echo "Copying missing MacPorts lib: $LIB_NAME"
-            cp "$LEAK_PATH" "GoldenCheetah.app/Contents/Frameworks/"
-            chmod +w "GoldenCheetah.app/Contents/Frameworks/$LIB_NAME"
-            fix_binary_id "GoldenCheetah.app/Contents/Frameworks/$LIB_NAME"
-        fi
-
-        install_name_tool -change "$LEAK_PATH" "$DEST_REL" "$BINARY"
-    done
-}
-
-# Scan and fix all binaries
-find GoldenCheetah.app/Contents/MacOS GoldenCheetah.app/Contents/Frameworks -type f | while read BINARY; do
-    if file "$BINARY" | grep -q "Mach-O"; then
-        fix_binary_id "$BINARY"
-        fix_binary_deps "$BINARY"
-
-        # Check architecture
-        ARCHS=$(lipo -info "$BINARY")
-        echo "Binary $BINARY archs: $ARCHS"
+    if otool -L "GoldenCheetah.app/Contents/MacOS/GoldenCheetah" | grep -q "/usr/local/lib/libftd2xx.dylib"; then
+        install_name_tool -change "/usr/local/lib/libftd2xx.dylib" "@rpath/libftd2xx.dylib" "GoldenCheetah.app/Contents/MacOS/GoldenCheetah"
     fi
-done
+else
+    echo "WARNING: D2XX lib not found at $D2XX_SRC"
+fi
 
-# 5. Codesign
-echo "Signing bundle..."
-codesign --force --deep --sign - GoldenCheetah.app
+# 4.6 Copy Libical (Manual Universal Build)
+ICAL_LIB_DIR="../libical-install/lib"
+if [ -d "$ICAL_LIB_DIR" ]; then
+    echo "Copying Libical dylibs from $ICAL_LIB_DIR"
+    # Copy all dylibs (libical, libicalss, libicalvcal) to cover dependencies
+    cp "$ICAL_LIB_DIR"/*.dylib "GoldenCheetah.app/Contents/Frameworks/"
+    chmod +w "GoldenCheetah.app/Contents/Frameworks/"*.dylib
+else
+    echo "ERROR: Libical install dir not found at $ICAL_LIB_DIR"
+fi
+
+# Using shared signing script
+echo "Calling shared signing script..."
+bash ../github/macos/sign_bundle.sh "GoldenCheetah.app" "${PYTHON_VERSION}"
 
 # 6. DMG
 hdiutil create -volname GoldenCheetah -srcfolder GoldenCheetah.app -ov -format UDZO GoldenCheetah.dmg
-mv GoldenCheetah.dmg ../GoldenCheetah_v3.8_Universal_MacPorts.dmg
+mv GoldenCheetah.dmg "../GoldenCheetah_v${GC_VERSION}_Universal.dmg"

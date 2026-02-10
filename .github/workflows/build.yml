@@ -12,6 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  GC_VERSION: "3.8"
   PYTHON_VERSION: "3.11"
   MACOSX_DEPLOYMENT_TARGET: "12.0"
 
@@ -99,10 +100,11 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      # Caching - Windows Dependencies
-      - name: Cache Windows Libs
+      # Caching - Windows Dependencies (Restore)
+      - name: Restore Windows Libs
         if: runner.os == 'Windows'
-        uses: actions/cache@v3
+        id: cache-windows-restore
+        uses: actions/cache/restore@v3
         with:
           path: |
             C:\libs
@@ -132,13 +134,19 @@ jobs:
         with:
           key: ${{ runner.os }}-${{ matrix.config.qt_version }}
 
-      # Caching - MacPorts (Universal Build)
-      - name: Cache MacPorts
+      # Caching - MacPorts (Universal Build) - Restore
+      - name: Restore MacPorts
         if: matrix.config.name == 'macOS Universal'
-        uses: actions/cache@v3
+        id: cache-macports-restore
+        uses: actions/cache/restore@v3
         with:
-          path: /opt/local
-          key: ${{ runner.os }}-macports-${{ hashFiles('github/macos/install_macports.sh') }}
+          path: |
+            /opt/local
+            libical-install
+            srmio-install
+            D2XX
+            R-Universal
+          key: ${{ runner.os }}-macports-${{ hashFiles('github/macos/macports_requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-macports-
 
@@ -152,7 +160,19 @@ jobs:
 
       - name: Install Dependencies (Windows)
         if: runner.os == 'Windows'
+        id: install-windows
         run: github/windows/install.ps1
+
+      - name: Save Windows Libs
+        if: runner.os == 'Windows' && steps.install-windows.outcome == 'success' && steps.cache-windows-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v3
+        with:
+          path: |
+            C:\libs
+            C:\jom
+            C:\R
+            C:\Python
+          key: ${{ runner.os }}-libs-${{ hashFiles('github/windows/install.ps1') }}
 
       - name: Install Dependencies (Linux)
         if: runner.os == 'Linux'
@@ -164,7 +184,20 @@ jobs:
 
       - name: Install Dependencies (macOS MacPorts)
         if: matrix.config.name == 'macOS Universal'
+        id: install-macports
         run: bash github/macos/install_macports.sh
+
+      - name: Save MacPorts
+        if: matrix.config.name == 'macOS Universal' && steps.install-macports.outcome == 'success' && steps.cache-macports-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v3
+        with:
+          path: |
+            /opt/local
+            libical-install
+            srmio-install
+            D2XX
+            R-Universal
+          key: ${{ runner.os }}-macports-${{ hashFiles('github/macos/macports_requirements.txt') }}
 
       - name: Setup MSVC (Windows)
         if: runner.os == 'Windows'
@@ -194,7 +227,7 @@ jobs:
           # Try parallel first (-j -k), fallback to single thread (-j1) if it fails.
           jom -k sub-qwt || jom -j1 sub-qwt
           # Build main source jom autodetects number of cores.
-          jom sub-src
+          jom
 
       - name: Prepend CCache to PATH (Unix)
         if: runner.os != 'Windows'
@@ -204,19 +237,23 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           # Ensure QMake uses ccache
-          qmake build.pro -r "QMAKE_CXX=ccache g++" "QMAKE_CC=ccache gcc"
           
           if [ "$(uname)" == "Darwin" ]; then
              # On macOS, ccache wraps clang usually
-             qmake build.pro -r "QMAKE_CXX=ccache clang++" "QMAKE_CC=ccache clang"
+             # Force Universal Build properties
+             if [ "${{ matrix.config.name }}" == "macOS Universal" ]; then
+                qmake build.pro -r "QMAKE_CXX=ccache clang++" "QMAKE_CC=ccache clang" "QMAKE_APPLE_DEVICE_ARCHS=x86_64 arm64"
+             else
+                qmake build.pro -r "QMAKE_CXX=ccache clang++" "QMAKE_CC=ccache clang"
+             fi
              CORES=$(sysctl -n hw.ncpu)
           else
+             qmake build.pro -r "QMAKE_CXX=ccache g++" "QMAKE_CC=ccache gcc"
              CORES=$(nproc)
-          fi
-          
+          fi          
           echo "Building with $CORES cores"
           make -j$CORES sub-qwt
-          make -j$CORES sub-src
+          make -j$CORES
 
       - name: Package (Windows)
         if: runner.os == 'Windows'

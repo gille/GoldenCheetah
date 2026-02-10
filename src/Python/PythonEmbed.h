@@ -67,7 +67,7 @@ class ScriptContext {
 class PythonEmbed {
 
     public:
-    
+
     PythonEmbed(const bool verbose=false, const bool interactive=false);
     ~PythonEmbed();
 
@@ -77,7 +77,7 @@ class PythonEmbed {
     QString pybin, pypath;
 
     // verify core dependencies are importable
-    bool checkDependencies();
+    [[nodiscard]] bool checkDependencies() const;
 
     // scripts can set a result value
     double result;

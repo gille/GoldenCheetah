@@ -27,6 +27,7 @@
 #include <QtGlobal>
 #include <QMessageBox>
 #include <QProcess>
+#include <QStringList>
 
 #ifdef slots // clashes with python headers
 #undef slots
@@ -47,17 +48,14 @@
 // Buffer for debug logs
 static std::vector<QString> g_debugBuffer;
 
-// Log helper
+// Log helper — buffers messages; dumped via qDebug only on init failure
 void debugLog(const char* fmt, ...) {
+    char buf[2048];
     va_list args;
     va_start(args, fmt);
-    QString msg;
-    //msg.vsprintf(fmt, args);
-    msg = QString::asprintf(fmt, args);
+    vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
-    g_debugBuffer.push_back(msg);
-    // Also print to stderr
-    fprintf(stderr, "%s", msg.toLocal8Bit().constData());
+    g_debugBuffer.push_back(QString::fromLocal8Bit(buf).trimmed());
 }
 
 // Redefine printd to use our logger
@@ -273,13 +271,6 @@ PythonEmbed::PythonEmbed(const bool verbose, const bool interactive) : verbose(v
         printd("PyInitializeEx(0)\n");
         Py_InitializeEx(0);
 
-        // set path - allocate storage for it...
-        //printd("set path=%s\n", pypath.toStdString().c_str());
-        //wchar_t *here = new wchar_t(pypath.length()+1);
-        //pypath.toWCharArray(here);
-        //here[pypath.length()]=0;
-        //PySys_SetPath(here);
-
         // set the module path in the same way the interpreter would
         printd("PyImportModule('sys')\n");
         PyObject *sys = PyImport_ImportModule("sys");
@@ -321,11 +312,65 @@ PythonEmbed::PythonEmbed(const bool verbose, const bool interactive) : verbose(v
             printd("Install stdio catcher\n");
             PyRun_SimpleString(stdOutErr.c_str()); //invoke code to redirect
 
+            // Retrieve and prepare user library paths
+            QStringList userPaths = appsettings->value(NULL, GC_PYTHON_USER_LIBRARY_PATHS).toStringList();
+            
+            // Add default user site-packages location
+            QString defaultUserPath = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/Python/site-packages";
+            if (!userPaths.contains(defaultUserPath)) {
+                userPaths.append(defaultUserPath);
+            }
+
+            // Ensure directories exist and add to sys.path
+            for (const QString &path : userPaths) {
+                QDir dir(path);
+                if (!dir.exists()) {
+                    dir.mkpath(".");
+                }
+                if (dir.exists()) {
+                     QString code = QString("import sys; sys.path.append(r'%1')").arg(path);
+                     PyRun_SimpleString(code.toStdString().c_str());
+                     printd("Added to sys.path: %s\n", path.toStdString().c_str());
+                }
+            }
+
  #ifdef Q_OS_LINUX
             // ensure site-packages is in path when using deployed Python on Linux
             if (PYTHONHOME == deployedPython) {
                 std::string ensureSitePackages = ("import sys\n"
                                                   "sys.path.append(sys.prefix+'/lib/python3.'+str(sys.version_info.minor)+'/site-packages')\n");
+                PyRun_SimpleString(ensureSitePackages.c_str()); //invoke code
+            }
+ #endif
+ #ifdef Q_OS_MAC
+            // ensure site-packages is in path when using deployed Python on macOS
+            // The framework structure is Python.framework/Versions/Current/lib/python3.11/site-packages
+            // sys.prefix should point to Python.framework/Versions/Current
+            if (PYTHONHOME.contains("Python.framework")) {
+                std::string ensureSitePackages = ("import sys, os\n"
+                                                  "lib_ver = 'python%d.%d' % (sys.version_info.major, sys.version_info.minor)\n"
+                                                  "site_pkg = os.path.join(sys.prefix, 'lib', lib_ver, 'site-packages')\n"
+                                                  "if not os.path.exists(site_pkg):\n"
+                                                  "    # Fallback to just python3 if specific version not found\n"
+                                                  "    site_pkg = os.path.join(sys.prefix, 'lib', 'python3', 'site-packages')\n"
+                                                  "\n"
+                                                  "if os.path.exists(site_pkg):\n"
+                                                  "    if site_pkg not in sys.path:\n"
+                                                  "        sys.path.append(site_pkg)\n"
+                                                  "else:\n"
+                                                  "    # Last resort: try checking for '3.11' directory directly if user reported non-standard layout\n"
+                                                  "    site_pkg = os.path.join(sys.prefix, 'lib', '%d.%d' % (sys.version_info.major, sys.version_info.minor), 'site-packages')\n"
+                                                  "    if os.path.exists(site_pkg) and site_pkg not in sys.path:\n"
+                                                  "        sys.path.append(site_pkg)\n"
+                                                  "\n"
+                                                  "print('DEBUG: Final sys.path:', sys.path)\n"
+                                                  "if os.path.exists(site_pkg):\n"
+                                                  "    print('DEBUG: site-packages contents:', os.listdir(site_pkg))\n"
+                                                  "    try:\n"
+                                                  "        import dateutil\n"
+                                                  "        print('DEBUG: Successfully imported dateutil')\n"
+                                                  "    except ImportError as e:\n"
+                                                  "        print('DEBUG: Failed to import dateutil:', e)\n");
                 PyRun_SimpleString(ensureSitePackages.c_str()); //invoke code
             }
  #endif
@@ -356,8 +401,12 @@ PythonEmbed::PythonEmbed(const bool verbose, const bool interactive) : verbose(v
 
             printd("Embedding completes\n");
 
-            // Verify dependencies
-            checkDependencies();
+            // Verify dependencies, something in Python works but maybe the packaging didn't.
+            if (!checkDependencies()) {
+                for (const auto &line : g_debugBuffer) {
+                    qDebug() << line;
+                }
+            }
             return;
         } // sys != NULL
     } // pythonInstalled == true
@@ -381,20 +430,24 @@ PythonEmbed::PythonEmbed(const bool verbose, const bool interactive) : verbose(v
     return;
 }
 
-bool PythonEmbed::checkDependencies()
+bool PythonEmbed::checkDependencies() const
 {
+    // Ensure we hold the GIL, as PyEval_SaveThread released it
+    PyGILState_STATE gstate;
+    gstate = PyGILState_Ensure();
+
     printd("Checking python dependencies...\n");
+
     // List of modules to check from requirements.txt
-    const char *modules[] = {
-        "sip", "numpy", "pandas", "scipy", "lmfit", "plotly", "importlib_metadata", NULL
+    const QStringList modules = {
+        "numpy", "pandas", "scipy", "lmfit", "plotly", "importlib_metadata"
     };
 
-    bool success = true;
-    QString missing;
+    QStringList missing;
 
     // Use a clean local scope to avoid polluting global namespace
     // We import, then check if it's there.
-    for (int i=0; modules[i]; i++) {
+    for (const auto& module : modules) {
         // We try to import within a function/local scope if possible, but PyRun_SimpleString runs in __main__
         // A better way is to plain import and letting it fail usually prints to stderr which we capture.
         // To avoid pollution we can just 'del module' afterwards or wrap in a try block.
@@ -403,43 +456,38 @@ bool PythonEmbed::checkDependencies()
                                "    import %1\n"
                                "except ImportError as e:\n"
                                "    print(f'Dependency Check Failed: {e}')\n"
-                               "    exit(1)\n").arg(modules[i]);
-        
+                               "    exit(1)\n").arg(module);
+
         // PyRun_SimpleString returns 0 on success, -1 on failure (if exit(1) is called it might kill the app? No, exit() in python raises SystemExit)
         // Actually exit(1) in embedded python might terminate the process if not handled?
         // Let's NOT use exit(). Let's set a variable.
-        
+
         code = QString("try:\n"
                        "    import %1\n"
                        "except ImportError as e:\n"
                        "    print(f'Dependency Check Failed: {e}')\n"
-                       "    raise e\n").arg(modules[i]);
+                       "    raise e\n").arg(module);
 
         if (PyRun_SimpleString(code.toStdString().c_str()) != 0) {
-            QString msg = QString("Failed to import module: %1").arg(modules[i]);
+            QString msg = QString("Failed to import module: %1").arg(module);
             debugLog(msg.toStdString().c_str());
-            if (!missing.isEmpty()) missing += ", ";
-            missing += modules[i];
-            success = false;
+            missing.push_back(module);
         }
     }
 
-    if (!success) {
+    if (!missing.empty()) {
         QString errorMsg = QObject::tr("GoldenCheetah Python support is enabled, but the following required packages could not be imported:\n\n%1\n\n"
-                                       "Please check the log for details.").arg(missing);
-        
+                                       "Please check the log for details.").arg(missing.join(", "));
+
         // We should warn the user.
         // But we are in the constructor, potentially on the main thread? Yes.
         QMessageBox::warning(0, QObject::tr("Python Dependencies Missing"), errorMsg);
-        
-        // Should we fail loading? 
-        // loaded = false; // Maybe? But core python works.
-        // User asked to "instantly know". The popup does that.
     } else {
         printd("All dependencies imported successfully.\n");
     }
 
-    return success;
+    PyGILState_Release(gstate);
+    return missing.empty();
 }
 
 // run on called thread

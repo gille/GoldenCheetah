@@ -14,7 +14,10 @@ FunctionEnd
 
 ; HM NIS Edit Wizard helper defines
 !define PRODUCT_NAME "Golden Cheetah"
-!define PRODUCT_VERSION "v3.8"
+!ifndef GC_VERSION
+  !define GC_VERSION "3.8"
+!endif
+!define PRODUCT_VERSION "v${GC_VERSION}"
 !define PRODUCT_BIT "64"
 !define PRODUCT_STARTMENU "Golden Cheetah"
 !define PRODUCT_WEB_SITE_FILENAME "GoldenCheetah WebSite"

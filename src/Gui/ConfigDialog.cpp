@@ -132,7 +132,6 @@ ConfigDialog::ConfigDialog(QDir _home, Context *context) :
     spacer->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
     head->addWidget(spacer);
 
-
     pagesWidget = new QStackedWidget(this);
 
     // create those config pages
@@ -170,6 +169,8 @@ ConfigDialog::ConfigDialog(QDir _home, Context *context) :
     HelpWhatsThis *trainHelp = new HelpWhatsThis(train);
     train->setWhatsThis(trainHelp->getWhatsThisText(HelpWhatsThis::Preferences_Training));
     pagesWidget->addWidget(train);
+
+
 
     QHBoxLayout *horizontalLayout = new QHBoxLayout;
     horizontalLayout->addWidget(pagesWidget, 1);
@@ -250,7 +251,6 @@ void ConfigDialog::saveClicked()
     changed |= train->saveClicked();
     changed |= interval->saveClicked();
     changed |= measures->saveClicked();
-
     hide();
 
     // did the home directory change?
@@ -385,6 +385,8 @@ qint32 MetricConfig::saveClicked()
 
     return state;
 }
+
+
 
 // INTERVALS CONFIG
 IntervalConfig::IntervalConfig(QDir home, Context *context) :

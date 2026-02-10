@@ -166,6 +166,8 @@ class MeasuresConfig : public QWidget
         MeasuresConfigPage *measuresPage;
 };
 
+
+
 class ConfigDialog : public QMainWindow
 {
     Q_OBJECT
@@ -196,5 +198,6 @@ class ConfigDialog : public QMainWindow
         IntervalConfig *interval;
         MeasuresConfig *measures;
         TrainConfig *train;
+
 };
 #endif
