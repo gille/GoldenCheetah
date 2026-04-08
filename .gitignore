@@ -69,6 +69,7 @@ unittests/Core/signalSafety/testSignalSafety
 unittests/Core/signalSafety/testSignalSafety
 unittests/Core/units/units
 unittests/Gui/calendarData/calendarData
+unittests/Core/splineCrash/testSplineCrash
 
 # Qt testlib
 target_wrapper.sh
